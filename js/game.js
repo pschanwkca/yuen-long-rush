@@ -1,4 +1,13 @@
 YLS('行緊主程式');const MAPDATA=window.__YLMAP;window.__YLMAP=null;
+// ===== v19.0 look: every lit surface uses three-step cel shading (the game's code still asks for MeshStandardMaterial) =====
+const TOON_G=(()=>{const lv=[110,185,255],d=new Uint8Array(lv.length*4);lv.forEach((v,i)=>d.set([v,v,v,255],i*4));const g=new THREE.DataTexture(d,lv.length,1,THREE.RGBAFormat);g.minFilter=g.magFilter=THREE.NearestFilter;g.generateMipmaps=false;g.needsUpdate=true;return g;})();
+(()=>{const STD_ONLY=['roughness','metalness','envMap','envMapIntensity','roughnessMap','metalnessMap','refractionRatio','flatShading','clearcoat','clearcoatRoughness','vertexTangents'];
+  class YLToonMaterial extends THREE.MeshToonMaterial{constructor(p){super();this.gradientMap=TOON_G;this.roughness=1;this.metalness=0;this.envMapIntensity=1;this.envMap=null;
+      if(p){const q={};for(const k in p){if(STD_ONLY.includes(k))this[k]=p[k];else q[k]=p[k];}this.setValues(q);}}
+    copy(s){super.copy(s);this.gradientMap=s.gradientMap||TOON_G;for(const k of ['roughness','metalness','envMapIntensity'])if(k in s)this[k]=s[k];return this;}}
+  YLToonMaterial.prototype.isYLToon=true;
+  THREE.YLStandard=THREE.MeshStandardMaterial;THREE.MeshStandardMaterial=YLToonMaterial;})();
+
 // ===== v18.4 phones load one district at a time (the full map needs more memory than a phone browser allows) =====
 // v18.8: the GitHub copy decides this in its small loader (so it can download just one district) and hands it over as window.__YLLITE
 const LITE=window.__YLLITE||(()=>{let force=null,reg='core';try{force=localStorage.getItem('ylreal-lite');reg=localStorage.getItem('ylreal-region')||'core';}catch(e){}
@@ -1805,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -8306,6 +8315,109 @@ const MP_NOTE='呢度開唔到多人模式：請喺 Claude app（或者已經登
 mpNet=function(){return (window.__MP_BC||MP.kind==='bc')?NET_BC:NET_AUTO;};
 {const _mm=mpMenu;mpMenu=function(){_mm();try{const p=document.querySelector('#iPanel .mpf + p')||[...document.querySelectorAll('#iPanel p')].pop();if(p&&!p.querySelector('.rmn')){const s=document.createElement('span');s.className='rmn';s.innerHTML='<br><b>點樣同朋友玩：</b>大家都要喺 Claude app（或者已登入 claude.ai）開呢個遊戲。開 artifact 嘅人喺 Share 用朋友個 Claude 帳號 email 邀請，權限揀 <b>Contributor</b>。';p.appendChild(s);}}catch(e){}};}
 function v7fBoot(){rmApi();}
+
+// ===== v19.0 look B: cel shading + ink outlines on every graphics level; higher levels add softer shadows, ambient occlusion,
+// depth of field, light shafts and wet-ground reflections. Everything reads the one depth buffer of the main render. =====
+const LOOK={lv:-1,ok:true,pass:null,depth:null,focus:8,dof:0,blob:null,err:null};
+const LOOK_FRAG=`#include <packing>
+uniform sampler2D tDiffuse,tDepth;uniform vec2 px;uniform float cn,cf,inkW,aoR,dofK,dofMax,focus,wet,rays;uniform vec2 sunUv;uniform vec3 sunCol;uniform mat4 proj,projInv,camW;uniform vec3 upV;varying vec2 vUv;
+float rawD(vec2 u){return texture2D(tDepth,u).x;}
+float vz(float d){return -perspectiveDepthToViewZ(d,cn,cf);}
+vec3 vpos(vec2 u,float d){vec4 p=projInv*vec4(u*2.-1.,d*2.-1.,1.);return p.xyz/p.w;}
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+void main(){vec2 uv=vUv;float d0=rawD(uv);bool sky=d0>=.99999;float z0=sky?cf:vz(d0);vec3 c=texture2D(tDiffuse,uv).rgb;
+#ifdef DOF
+ float coc=sky?1.:clamp(abs(z0-focus)/max(z0,1.)*dofK,0.,1.);
+ if(coc>.02){vec3 acc=c;float wsum=1.;float r=coc*dofMax;
+  for(int i=0;i<DOF;i++){float a=float(i)*2.39996+hash(uv)*.5;float rr=sqrt((float(i)+.5)/float(DOF))*r;vec2 su=uv+vec2(cos(a),sin(a))*rr*vec2(px.x/px.y,1.);float sd=rawD(su);float sz=sd>=.99999?cf:vz(sd);
+   float w=sz<z0-1.?clamp(abs(sz-focus)/max(sz,1.)*dofK,0.,1.):1.;acc+=texture2D(tDiffuse,su).rgb*w;wsum+=w;}
+  c=acc/wsum;}
+#else
+ float coc=0.;
+#endif
+ vec3 P=sky?vec3(0):vpos(uv,d0);
+ vec3 N=vec3(0,0,1);
+#if defined(AO)||defined(SSR)
+ if(!sky){vec3 px1=vpos(uv+vec2(px.x,0),rawD(uv+vec2(px.x,0)))-P,py1=vpos(uv+vec2(0,px.y),rawD(uv+vec2(0,px.y)))-P;vec3 px0=P-vpos(uv-vec2(px.x,0),rawD(uv-vec2(px.x,0))),py0=P-vpos(uv-vec2(0,px.y),rawD(uv-vec2(0,px.y)));
+   vec3 ex=abs(px0.z)<abs(px1.z)?px0:px1,ey=abs(py0.z)<abs(py1.z)?py0:py1;N=normalize(cross(ex,ey));}
+#endif
+#ifdef AO
+ if(!sky){float occ=0.;float rad=aoR*proj[1][1]*.5/max(z0,1.);for(int i=0;i<AO;i++){float a=float(i)*2.39996+hash(uv*3.1)*6.28;float rr=(float(i)+.5)/float(AO);vec2 su=uv+vec2(cos(a),sin(a))*rad*rr*vec2(px.x/px.y,1.);
+   float sd=rawD(su);if(sd>=.99999)continue;vec3 S=vpos(su,sd)-P;float l=length(S);occ+=max(0.,dot(N,S/l)-.08)*(1.-smoothstep(.0,aoR*1.4,l));}
+  occ=clamp(occ/float(AO)*1.9,0.,.75);c*=1.-occ*(1.-smoothstep(80.,220.,z0));}
+#endif
+#ifdef SSR
+ if(!sky&&wet>.05&&dot(N,upV)>.85&&z0<90.){vec3 V=normalize(P);vec3 Rd=reflect(V,N);vec3 Q=P;vec3 hit=vec3(0);float f=0.;float st=.6+z0*.02;
+  for(int i=0;i<24;i++){Q+=Rd*st;st*=1.12;vec4 cp=proj*vec4(Q,1.);vec2 su=cp.xy/cp.w*.5+.5;if(su.x<0.||su.x>1.||su.y<0.||su.y>1.)break;float sd=rawD(su);if(sd>=.99999)continue;float sz=vz(sd);if(-Q.z>sz&&-Q.z-sz<st*2.5){hit=texture2D(tDiffuse,su).rgb;f=(1.-smoothstep(.7,1.,max(abs(su.x-.5),abs(su.y-.5))*2.));break;}}
+  vec3 W=(camW*vec4(P,1.)).xyz;float pud=smoothstep(.45,.62,vn(W.xz*.18)*.65+vn(W.xz*.6)*.35);float fr=.05+.45*pow(1.-max(0.,dot(-V,N)),4.);float k=wet*mix(.25,1.,pud);c=mix(c,c*.82,k*.35);c=mix(c,hit,f*fr*k);}
+#endif
+ // ink: silhouettes from depth jumps, creases from a break in the plane (1/z is planar in screen space)
+ if(!sky&&inkW>0.){float e=0.;vec2 o1=vec2(px.x,0)*inkW,o2=vec2(0,px.y)*inkW;
+   float a1=rawD(uv+o1),a2=rawD(uv-o1),b1=rawD(uv+o2),b2=rawD(uv-o2);
+   float za1=a1>=.99999?cf:vz(a1),za2=a2>=.99999?cf:vz(a2),zb1=b1>=.99999?cf:vz(b1),zb2=b2>=.99999?cf:vz(b2);
+   float jump=max(max(za1,za2),max(zb1,zb2))-z0;float tol=.05*z0+.25;e=max(e,step(tol,jump));
+   float iz=1./z0;float cx=abs(1./za1+1./za2-2.*iz)/iz,cy=abs(1./zb1+1./zb2-2.*iz)/iz;e=max(e,smoothstep(.03,.07,min(max(cx,cy),1.))*(1.-smoothstep(25.,60.,z0)));
+   float fade=(1.-smoothstep(70.,240.,z0))*(1.-coc*.8);c=mix(c,c*.08,e*fade*.92);}
+#ifdef RAYS
+ if(rays>0.){vec2 dl=(sunUv-uv);float L=0.;vec2 su=uv;float dec=1.;for(int i=0;i<28;i++){su+=dl/28.;float sd=rawD(clamp(su,0.,1.));L+=(sd>=.99999?1.:0.)*dec;dec*=.965;}
+  L/=28.;float dist=length((uv-sunUv)*vec2(1.,px.x/px.y));c+=sunCol*L*rays*(1.-smoothstep(.0,.9,dist))*.55;}
+#endif
+ gl_FragColor=vec4(c,1.);}`;
+function lookMake(lv){const D={};if(lv>=2){D.AO=lv>=3?14:8;D.DOF=lv>=3?14:8;}if(lv>=3){D.SSR=1;D.RAYS=1;}
+  return new THREE.ShaderPass({defines:D,uniforms:{tDiffuse:{value:null},tDepth:{value:null},px:{value:new THREE.Vector2()},cn:{value:.1},cf:{value:1000},inkW:{value:1},aoR:{value:1.4},dofK:{value:0},dofMax:{value:.006},focus:{value:8},
+      wet:{value:0},rays:{value:0},sunUv:{value:new THREE.Vector2(.5,.8)},sunCol:{value:new THREE.Color(1,.85,.6)},proj:{value:new THREE.Matrix4()},camW:{value:new THREE.Matrix4()},projInv:{value:new THREE.Matrix4()},upV:{value:new THREE.Vector3(0,1,0)}},
+    vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:LOOK_FRAG});}
+// one composer on every level: main render (with depth) -> look pass -> bloom (medium and up) -> FINAL grade
+setupPost=function(){composer=null;bloom=null;finalPass=null;LOOK.pass=null;LOOK.depth=null;const lv=QV.lv<0?qAutoStart():QV.lv;LOOK.lv=lv;
+  if(!THREE.EffectComposer||!THREE.ShaderPass){LOOK.ok=false;}
+  else try{const sz=renderer.getDrawingBufferSize(new THREE.Vector2());const gl2=renderer.capabilities.isWebGL2;
+    const half=gl2||renderer.extensions.get('EXT_color_buffer_half_float')||renderer.extensions.get('OES_texture_half_float');const opt={type:half?THREE.HalfFloatType:THREE.UnsignedByteType,format:THREE.RGBAFormat};
+    const hasDepth=gl2||!!renderer.extensions.get('WEBGL_depth_texture');if(!hasDepth)throw new Error('no depth texture');
+    const rtA=new THREE.WebGLRenderTarget(sz.x,sz.y,opt);rtA.depthBuffer=false;rtA.texture.generateMipmaps=false;
+    composer=new THREE.EffectComposer(renderer,rtA);
+    const rtB=new THREE.WebGLRenderTarget(sz.x,sz.y,opt);rtB.texture.generateMipmaps=false;const dt=new THREE.DepthTexture(sz.x,sz.y);dt.type=THREE.UnsignedIntType;rtB.depthTexture=dt;rtB.depthBuffer=true;
+    composer.renderTarget2.dispose();composer.renderTarget2=rtB;composer.readBuffer=rtB;composer.writeBuffer=composer.renderTarget1;LOOK.depth=dt;
+    const _ss=composer.setSize.bind(composer);composer.setSize=function(w,h){_ss(w,h);try{const s=renderer.getDrawingBufferSize(new THREE.Vector2());dt.image.width=s.x;dt.image.height=s.y;dt.needsUpdate=true;}catch(e){}};
+    const _cr=composer.render.bind(composer);composer.render=function(d){this.readBuffer=rtB;this.writeBuffer=this.renderTarget1;return _cr(d);};
+    composer.addPass(new THREE.RenderPass(scene,camera));
+    const lp=lookMake(lv);lp.uniforms.tDepth.value=dt;composer.addPass(lp);LOOK.pass=lp;
+    if(lv>=1&&THREE.UnrealBloomPass){bloom=new THREE.UnrealBloomPass(new THREE.Vector2(sz.x/(lv>=3?2:4),sz.y/(lv>=3?2:4)),[0,.35,.5,.6][lv],.55,.9);composer.addPass(bloom);}
+    finalPass=new THREE.ShaderPass(FINAL);composer.addPass(finalPass);
+    // the main render must land in the target that carries the depth buffer
+    composer.passes[0].needsSwap=false;
+  }catch(e){console.error('look',e);LOOK.err=String(e);composer=null;}
+  renderer.toneMapping=composer?THREE.NoToneMapping:THREE.ACESFilmicToneMapping;renderer.outputEncoding=composer?THREE.LinearEncoding:THREE.sRGBEncoding;
+  scene.traverse(o=>{if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true);}});};
+// shadows: medium hard-edged, high and ultra soft; low keeps none and draws small round shadows under people and cars instead
+{const _aq=applyQuality;applyQuality=function(lv,force){const was=renderer.shadowMap.type;const r=_aq(lv,force);try{const L=QV.lv;const want=L>=2?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
+    if(renderer.shadowMap.type!==want){renderer.shadowMap.type=want;if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}scene.traverse(o=>{if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.needsUpdate=true);});}
+    if(LOOK.lv!==L)setupPost();if(LOOK.blob)LOOK.blob.visible=L===0;}catch(e){console.error('look q',e);}return r;};}
+function lookBlobInit(){if(LOOK.blob)return;const [c,g]=cvs(64,64);const gr=g.createRadialGradient(32,32,2,32,32,31);gr.addColorStop(0,'rgba(0,0,0,.55)');gr.addColorStop(.6,'rgba(0,0,0,.3)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);
+  const m=new THREE.MeshBasicMaterial({map:ctex(c),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4,toneMapped:false});
+  const b=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),m,64);b.frustumCulled=false;b.renderOrder=2;b.count=0;scene.add(b);LOOK.blob=b;b.visible=QV.lv===0;}
+const _lbM=new THREE.Matrix4(),_lbQ=new THREE.Quaternion(),_lbS=new THREE.Vector3(),_lbP=new THREE.Vector3(),_lbY=new THREE.Vector3(0,1,0);
+function lookBlobs(){const b=LOOK.blob;if(!b||!b.visible)return;let n=0;const P=PLAYER,cx=P.x,cz=P.z;
+  const put=(x,y,z,sx,sz,h)=>{if(n>=64)return;_lbP.set(x,y+.04,z);_lbQ.setFromAxisAngle(_lbY,h||0);_lbS.set(sx,1,sz);_lbM.compose(_lbP,_lbQ,_lbS);b.setMatrixAt(n++,_lbM);};
+  if(!P.car&&!P.riding)put(P.x,P.grounded===false?TH(P.x,P.z):P.y,P.z,1.1,1.1);
+  for(const v of vehicles){if(n>=40)break;const dx=v.x-cx,dz=v.z-cz;if(dx*dx+dz*dz>70*70)continue;put(v.x,v.y||TH(v.x,v.z),v.z,2.6,5.2,v.h);}
+  for(const p of peds){if(n>=64)break;const g=p.g;if(!g||!g.visible)continue;const dx=g.position.x-cx,dz=g.position.z-cz;if(dx*dx+dz*dz>45*45)continue;put(g.position.x,g.position.y,g.position.z,.9,.9);}
+  b.count=n;b.instanceMatrix.needsUpdate=true;}
+// per frame: camera matrices, focus on the player, wet ground, sun direction
+const _lkV=new THREE.Vector3(),_lkS=new THREE.Vector3();
+function lookTick(){const p=LOOK.pass;if(!p)return;const U=p.uniforms;const sz=renderer.getDrawingBufferSize(_lkV);U.px.value.set(1/sz.x,1/sz.y);U.cn.value=camera.near;U.cf.value=camera.far;
+  U.proj.value.copy(camera.projectionMatrix);U.camW.value.copy(camera.matrixWorld);U.projInv.value.copy(camera.projectionMatrixInverse);
+  U.inkW.value=Math.max(1,Math.min(2.6,sz.y/560))*(LOOK.lv===0?.9:1);
+  _lkS.set(0,1,0).transformDirection(camera.matrixWorldInverse);U.upV.value.copy(_lkS);
+  const P=PLAYER,fx=P.car?P.car.x:P.x,fz=P.car?P.car.z:P.z,fy=(P.car?(P.car.y||0)+1:P.y+1.2);const fd=camera.position.distanceTo(_lkV.set(fx,fy,fz));LOOK.focus+=(fd-LOOK.focus)*.25;U.focus.value=LOOK.focus;
+  // depth of field: light while driving or fighting, stronger in dialogue and menus
+  let k=LOOK.lv>=3?.5:LOOK.lv>=2?.32:0;if(P.car)k*=.35;else if(typeof FIGHT!=='undefined'&&FIGHT&&FIGHT.on)k*=.5;if(typeof dlgQ!=='undefined'&&dlgQ&&dlgQ.length)k*=2.2;if(!started)k*=1.5;LOOK.dof+=(k-LOOK.dof)*.1;U.dofK.value=LOOK.dof;U.dofMax.value=LOOK.lv>=3?.009:.006;
+  U.wet.value=typeof Wx!=='undefined'?Wx.wet:0;U.aoR.value=LOOK.lv>=3?1.6:1.3;
+  if(LOOK.lv>=3){const sd=_lkS.copy(sun.position).sub(sun.target.position).normalize();const up=sd.y;_lkV.copy(camera.position).addScaledVector(sd,800).project(camera);
+    const vis=_lkV.z<1&&up>.02?1:0;U.sunUv.value.set(_lkV.x*.5+.5,_lkV.y*.5+.5);const on=vis*(1-Math.min(1,Math.max(0,Math.hypot(_lkV.x,_lkV.y)-1.1)))*Math.min(1,up*5)*(1-(typeof Wx!=='undefined'?Wx.cloud*.7:0));U.rays.value=on;
+    if(sun.color)U.sunCol.value.copy(sun.color);}}
+{const _u=update;update=function(dt){const r=_u(dt);try{lookTick();lookBlobs();}catch(e){if(!LOOK.err){LOOK.err=String(e);console.error('look tick',e);}}return r;};}
+function v8aBoot(){try{lookBlobInit();}catch(e){console.error('blob',e);}if(!composer)try{setupPost();}catch(e){}}
 
 
 
