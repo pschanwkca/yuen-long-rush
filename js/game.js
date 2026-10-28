@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -8616,9 +8616,9 @@ function rgParts(L){let key=rgShapeKey(L);let P=RG.cache.get(key);if(P){P.n++;re
    if(L.hair==='long')p.push(hp(new THREE.SphereGeometry(1,seg,seg/2,Math.PI*.85,Math.PI*1.3,Math.PI*.3,Math.PI*.62),hairC,0,-.25,-.06,0,0,0,1.06,1.25,1.0));
    if(L.hair==='bun')p.push(hp(new THREE.SphereGeometry(.4,seg/2,seg/3),hairC,0,.75,-.55));
    if(L.hair==='spiky')for(let k=0;k<9;k++){const a=k/9*Math.PI*1.6-.8;p.push(hp(new THREE.ConeGeometry(.18,.5,flat?4:8),hairC,Math.sin(a)*.55,.8,Math.cos(a)*.35-.1,Math.cos(a)*-.6-.2,0,Math.sin(a)*-.7));}
-   for(const s of [-1,1]){p.push(hp(new THREE.SphereGeometry(.15,hi?18:10,hi?12:7),white,s*.31,.02,.84,0,0,0,1.25,.8,.45));p.push(hp(new THREE.SphereGeometry(.088,hi?16:8,hi?10:6),8,s*.3,0,.9,0,0,0,1,1.05,.4));
+   for(const s of [-1,1]){if(!L.noFace){p.push(hp(new THREE.SphereGeometry(.15,hi?18:10,hi?12:7),white,s*.31,.02,.84,0,0,0,1.25,.8,.45));p.push(hp(new THREE.SphereGeometry(.088,hi?16:8,hi?10:6),8,s*.3,0,.9,0,0,0,1,1.05,.4));
      p.push(hp(new THREE.SphereGeometry(.045,8,6),dark,s*.3,0,.935,0,0,0,1,1,.3));if(hi)p.push(hp(new THREE.SphereGeometry(.018,6,4),6,s*.3+.03,.04,.955));
-     p.push(hp(new THREE.BoxGeometry(.36,.04,.06),dark,s*.31,.085,.895,0,s*.28,-s*.12));
+     p.push(hp(new THREE.BoxGeometry(.36,.04,.06),dark,s*.31,.085,.895,0,s*.28,-s*.12));}
      p.push(hp(new THREE.SphereGeometry(.21,hi?12:8,hi?10:6),skin,s*.82,-.02,-.04,0,s*.35,0,.32,1,.7));}
    if(L.beard){p.push(hp(new THREE.SphereGeometry(.7,seg,seg/2,0,Math.PI*2,Math.PI*.55,Math.PI*.4),hairC,0,-.1,.05,0,0,0,.95,1.05,1.05));p.push(hp(new THREE.BoxGeometry(.5,.08,.1),hairC,0,-.27,.86));}
    if(L.glasses==='round'){for(const s of [-1,1])p.push(hp(new THREE.TorusGeometry(.17,.025,6,16),7,s*.31,.02,.98));p.push(hp(new THREE.BoxGeometry(.2,.03,.03),7,0,.05,.99));}
@@ -8917,6 +8917,122 @@ function rkEnd(){const P=PLAYER;RKT.on=false;if(RKT.car){scene.remove(RKT.car);R
 // keep the player still and the normal camera off while the ride plays
 {const _gb=gameBlocked;gameBlocked=function(){return RKT.on||_gb();};}
 {const _u=update;update=function(dt){const r=_u(dt);try{rkTick(dt);}catch(e){console.error('rocket',e);RKT.err=String(e);rkEnd();}return r;};}
+
+// ===== v20.1 畫面工作室: paint your own face (one drawing per expression) on your character; friends in the room see it =====
+const FACE_EX=[['n','平時'],['happy','開心'],['angry','嬲'],['pain','痛'],['scared','驚'],['blink','眨眼']];
+const FST={on:false,cur:'n',cv:{},hist:{},redo:{},tool:'pen',size:6,col:'#1a1a1a',ex:'n',yaw:0,saved:null,peers:new Map(),inbox:new Map()};
+const FACE_N=256;
+function faceLoad(){if(FST.saved)return FST.saved;let d={};try{d=JSON.parse(localStorage.getItem('ylreal-face')||'{}')||{};}catch(e){d={};}FST.saved=d;return d;}
+function faceHas(d){d=d||faceLoad();return !!(d&&d.n);}
+function faceStore(d){FST.saved=d;try{localStorage.setItem('ylreal-face',JSON.stringify(d));}catch(e){toast('部機冇位存塊面');}}
+// ---- the face decal: the front of the head shape with a planar UV ----
+function faceGeo(L){const f=L.fem?1:0;const F=Object.assign({nose:f?.17:.26,brow:f?.04:.1},RG_FACE[(L.face||0)%4]);if(f){F.jaw=Math.max(F.jaw,.32);F.chin=Math.min(F.chin,.05);}
+  const S=[.125*(1-f*.05),.13*(1-f*.04),.126];const g0=rgHeadGeo(36,F).toNonIndexed();const p=g0.attributes.position,n=g0.attributes.normal;const pos=[],uv=[],nor=[];
+  for(let i=0;i<p.count;i+=3){let ok=true;for(let k=0;k<3;k++){if(p.getZ(i+k)<.05)ok=false;}if(!ok)continue;
+    for(let k=0;k<3;k++){const x=p.getX(i+k),y=p.getY(i+k),z=p.getZ(i+k);const nx=n.getX(i+k),ny=n.getY(i+k),nz=n.getZ(i+k);const o=.025;
+      pos.push((x+nx*o)*S[0],(y+ny*o)*S[1]+.12,(z+nz*o)*S[2]+.012);nor.push(nx,ny,nz);uv.push(x/1.8+.5,y/2.0+.5);}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeBoundingSphere();return g;}
+const FACE_IMG=new Map();// dataURL -> {img,tex}
+function faceTex(url){if(!url)return null;let e=FACE_IMG.get(url);if(e)return e.tex;const img=new Image();const tex=new THREE.Texture(img);tex.encoding=THREE.sRGBEncoding;img.onload=()=>{tex.needsUpdate=true;};img.src=url;e={img,tex};FACE_IMG.set(url,e);if(FACE_IMG.size>60){const k=FACE_IMG.keys().next().value;const o=FACE_IMG.get(k);o.tex.dispose();FACE_IMG.delete(k);}return tex;}
+function faceAttach(p,data){if(!p||!p.rig||!data||!data.n)return;const J=p.J;if(p.faceM){p.faceM.parent&&p.faceM.parent.remove(p.faceM);}
+  const m=new THREE.MeshStandardMaterial({map:faceTex(data.n),transparent:true,alphaTest:.04,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,roughness:.8});
+  const me=new THREE.Mesh(faceGeo(p.look),m);me.renderOrder=3;J.head.add(me);p.faceM=me;p.faceData=data;}
+// expression -> drawing (falls back to 平時)
+function facePick(p,nm,blink){const d=p.faceData;if(!d)return null;if(blink&&d.blink)return d.blink;return d[nm]||d.n;}
+{const _ex=rgExpr;rgExpr=function(p,dt){_ex(p,dt);if(!p.faceM||(FST.on&&p===PLAYER.p))return;const E=p.expr;const nm=(rgAutoExpr(p)||'n');const bl=E.blink<0;const url=facePick(p,nm,bl);const t=faceTex(url);if(t&&p.faceM.material.map!==t){p.faceM.material.map=t;p.faceM.material.needsUpdate=true;}};}
+// the player's look hides the built-in eyes, brows and mouth when a face is painted
+{const _fo=rgFromOutfit;rgFromOutfit=function(o){const L=_fo(o);if(faceHas()||FST.preview)L.noFace=true;return L;};}
+if(!RG_SHAPE.includes('noFace'))RG_SHAPE.push('noFace');
+{const _bo=buildOutfitModel;buildOutfitModel=function(o){const p=_bo(o);try{if(p&&p.rig&&p.look&&p.look.noFace){for(const m of [...p.J.brow,...p.J.lid,p.J.mouth,p.J.mouthIn])m.visible=false;p.noFaceParts=true;}}catch(e){}return p;};}
+{const _ao=applyOutfit;applyOutfit=function(){const r=_ao();try{const d=faceLoad();if(faceHas(d)&&PLAYER.p)faceAttach(PLAYER.p,d);}catch(e){console.error('face',e);}return r;};}
+// keep the hidden face parts hidden (the rig tick shows faces again up close)
+{const _rt=rgTick;rgTick=function(dt){const r=_rt(dt);for(const p of RG.list){if(p.noFaceParts){for(const m of [...p.J.brow,...p.J.lid,p.J.mouth,p.J.mouthIn])m.visible=false;}}return r;};}
+// ---- room sync: send the drawings in small pieces; friends rebuild them ----
+function faceSend(to){if(typeof MP==='undefined'||!MP.on)return;const d=faceLoad();if(!faceHas(d)){mpSend({t:'fcx',pid:MP.pid});return;}const v=(FST.ver=(FST.ver||0)+1);
+  for(const [k] of FACE_EX){const url=d[k];if(!url)continue;const n=Math.ceil(url.length/2800);for(let i=0;i<n;i++)mpSend({t:'fc',pid:MP.pid,v,e:k,i,n,d:url.slice(i*2800,(i+1)*2800)});}mpSend({t:'fcd',pid:MP.pid,v});}
+{const _rv=mpRecv;mpRecv=function(d,from){if(d&&(d.t==='fc'||d.t==='fcd'||d.t==='fcx')){if(MP.host)mpRelay(d,from);if(d.pid===MP.pid)return;
+    if(d.t==='fcx'){FST.peers.delete(d.pid);const rp=MP.peers.get(d.pid);if(rp&&rp.av&&rp.av.faceM){rp.av.faceM.parent.remove(rp.av.faceM);rp.av.faceM=null;}return;}
+    let box=FST.inbox.get(d.pid);if(!box||box.v!==d.v){box={v:d.v,parts:{}};FST.inbox.set(d.pid,box);}
+    if(d.t==='fc'){(box.parts[d.e]||(box.parts[d.e]=[]))[d.i]=d.d;box.parts[d.e].n=d.n;return;}
+    const out={};for(const k in box.parts){const a=box.parts[k];let ok=true;for(let i=0;i<a.n;i++)if(a[i]==null)ok=false;if(ok)out[k]=a.join('');}
+    if(out.n){FST.peers.set(d.pid,out);const rp=MP.peers.get(d.pid);if(rp&&rp.av)faceAttach(rp.av,out);}return;}return _rv(d,from);};}
+{const _sl=mpSetLook;mpSetLook=function(rp,look){const r=_sl(rp,look);try{const f=FST.peers.get(rp.pid);if(f&&rp.av&&!rp.av.faceM)faceAttach(rp.av,f);}catch(e){}return r;};}
+{const _bv=mpBuildAv;mpBuildAv=function(look){const av=_bv(look);try{if(av&&av.rig&&look&&look.f){av.look.noFace=true;for(const m of [...av.J.brow,...av.J.lid,av.J.mouth,av.J.mouthIn])m.visible=false;av.noFaceParts=true;}}catch(e){}return av;};}
+{const _ml=mpLook;mpLook=function(){const o=_ml();try{if(faceHas())o.f=1;}catch(e){}return o;};}
+// someone joins: send them our face a moment later
+{const _wl=typeof mpWelcome==='function'?mpWelcome:null;if(_wl)mpWelcome=function(){const r=_wl.apply(this,arguments);setTimeout(()=>faceSend(),1500);return r;};}
+{const _jn=typeof mpJoin==='function'?mpJoin:null;if(_jn)mpJoin=function(){const r=_jn.apply(this,arguments);Promise.resolve(r).then(()=>setTimeout(()=>faceSend(),2500)).catch(()=>{});return r;};}
+setInterval(()=>{try{if(typeof MP!=='undefined'&&MP.on&&faceHas()&&MP.peers.size&&(FST.lastPeers||0)!==MP.peers.size){FST.lastPeers=MP.peers.size;setTimeout(faceSend,800);}}catch(e){}},2000);
+// ---- the studio ----
+function fsCanvas(k){if(FST.cv[k])return FST.cv[k];const c=document.createElement('canvas');c.width=c.height=FACE_N;const d=faceLoad();if(d[k]){const im=new Image();im.onload=()=>{c.getContext('2d').drawImage(im,0,0,FACE_N,FACE_N);fsPaint();};im.src=d[k];}FST.cv[k]=c;FST.hist[k]=[];FST.redo[k]=[];return c;}
+function fsGuide(g,W){W=W||FACE_N;g.save();g.strokeStyle='rgba(120,80,20,.6)';g.lineWidth=2;g.setLineDash([4,4]);
+  // face outline: the decal covers the front of the head, eyes sit on the middle line
+  g.beginPath();g.ellipse(W*.5,W*.5,W*.43,W*.47,0,0,Math.PI*2);g.stroke();
+  const ey=W*(.5-.01/2),ex=W*.31/1.8;for(const s of [-1,1]){g.beginPath();g.ellipse(W*.5+s*ex,W-ey,W*.07,W*.04,0,0,Math.PI*2);g.stroke();}
+  g.beginPath();g.moveTo(W*.5,W*.44);g.lineTo(W*.47,W*.58);g.lineTo(W*.53,W*.58);g.stroke();
+  g.beginPath();g.moveTo(W*.4,W*.73);g.quadraticCurveTo(W*.5,W*.77,W*.6,W*.73);g.stroke();
+  g.fillStyle='rgba(120,80,20,.75)';g.font='bold 12px sans-serif';g.fillText('眼',W*.5-ex-6,W-ey-12);g.fillText('鼻',W*.5+10,W*.55);g.fillText('口',W*.5-5,W*.85);g.restore();}
+function fsPaint(){const v=$('#fsView');if(!v)return;const g=v.getContext('2d');g.clearRect(0,0,v.width,v.height);g.fillStyle=PLAYER.p&&PLAYER.p.look?PLAYER.p.look.skin:'#e8bf98';g.fillRect(0,0,v.width,v.height);
+  if(FST.showGuide!==false)fsGuide(g,v.width);g.drawImage(fsCanvas(FST.cur),0,0,v.width,v.height);fsPreview();}
+let FS_URLT=0;function fsPreview(){const p=PLAYER.p;if(!p||!p.rig)return;if(!p.faceM||FST.dirty){const d={};for(const [k] of FACE_EX){if(FST.cv[k]&&!fsBlank(FST.cv[k]))d[k]=FST.cv[k].toDataURL('image/png');}if(!d.n)d.n=fsCanvas('n').toDataURL('image/png');faceAttach(p,d);FST.dirty=false;}
+  const t=new THREE.CanvasTexture(fsCanvas(FST.cur));t.encoding=THREE.sRGBEncoding;if(p.faceM.material.map&&p.faceM.material.map.isCanvasTexture)p.faceM.material.map.dispose();p.faceM.material.map=t;p.faceM.material.needsUpdate=true;p.expr.force=FST.cur==='blink'?'n':FST.cur;p.expr.ft=999;}
+function fsBlank(c){const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;for(let i=3;i<d.length;i+=16)if(d[i]>8)return false;return true;}
+function fsPush(){const c=fsCanvas(FST.cur);const h=FST.hist[FST.cur];h.push(c.getContext('2d').getImageData(0,0,FACE_N,FACE_N));if(h.length>30)h.shift();FST.redo[FST.cur]=[];}
+function fsUndo(r){const k=FST.cur,c=fsCanvas(k),g=c.getContext('2d');const from=r?FST.redo[k]:FST.hist[k],to=r?FST.hist[k]:FST.redo[k];if(!from.length)return;to.push(g.getImageData(0,0,FACE_N,FACE_N));g.putImageData(from.pop(),0,0);fsPaint();}
+function fsFill(x,y){const c=fsCanvas(FST.cur),g=c.getContext('2d'),W=FACE_N;const im=g.getImageData(0,0,W,W),d=im.data;const i0=(y*W+x)*4;const t=[d[i0],d[i0+1],d[i0+2],d[i0+3]];
+  const col=new THREE.Color(FST.col);const R=[Math.round(col.r*255),Math.round(col.g*255),Math.round(col.b*255),255];if(t.every((v,i)=>Math.abs(v-R[i])<4))return;const st=[[x,y]];const seen=new Uint8Array(W*W);
+  const same=i=>Math.abs(d[i]-t[0])<40&&Math.abs(d[i+1]-t[1])<40&&Math.abs(d[i+2]-t[2])<40&&Math.abs(d[i+3]-t[3])<60;
+  while(st.length){const [px,py]=st.pop();if(px<0||py<0||px>=W||py>=W)continue;const k=py*W+px;if(seen[k])continue;seen[k]=1;const i=k*4;if(!same(i))continue;d[i]=R[0];d[i+1]=R[1];d[i+2]=R[2];d[i+3]=255;st.push([px+1,py],[px-1,py],[px,py+1],[px,py-1]);}
+  g.putImageData(im,0,0);}
+function fsOpen(){if(!PLAYER.p||!PLAYER.p.rig){toast('呢個角色畫唔到面');return;}FST.on=true;FST.cur='n';FST.cv={};FST.hist={};FST.redo={};FST.dirty=true;FST.preview=true;FST.yaw=0;
+  for(const [k] of FACE_EX)fsCanvas(k);applyOutfit();
+  const el=document.createElement('div');el.id='faceStudio';el.className='panel';
+  el.innerHTML=`<div class="fsh"><b>🎨 畫面工作室</b><span>跟住虛線參考位畫，旁邊嘅人仔即時更新</span></div>
+  <div class="fsx">${FACE_EX.map(([k,n])=>`<button data-x="${k}" class="${k==='n'?'on':''}">${n}</button>`).join('')}</div>
+  <canvas id="fsView" width="512" height="512"></canvas>
+  <div class="fst"><button data-t="pen" class="on">✏️ 筆</button><button data-t="erase">🧽 擦</button><button data-t="fill">🪣 填色</button><button data-t="pick">💧 吸色</button>
+   <span class="fss">${[3,6,12,22].map(s=>`<button data-s="${s}" class="${s===6?'on':''}"><i style="width:${Math.max(4,s/1.4)}px;height:${Math.max(4,s/1.4)}px"></i></button>`).join('')}</span></div>
+  <div class="fsc">${['#1a1a1a','#ffffff','#7a3b2a','#c8102e','#f08ca0','#e8a33c','#f6d84a','#3d8b4f','#2f6fd0','#7a4bc8','#e8bf98','#a86d45'].map(c=>`<button data-c="${c}" style="background:${c}"></button>`).join('')}<input type="color" id="fsCol" value="#1a1a1a" title="自選顏色"></div>
+  <div class="fsb"><button data-a="undo">↶ 復原</button><button data-a="redo">↷ 重做</button><button data-a="copy">複製「平時」</button><button data-a="clear">清除</button><button data-a="guide">參考線</button><button data-a="rot">⟳ 轉身</button></div>
+  <div class="fsb"><button data-a="off" class="ghost">用返預設五官</button><button data-a="cancel" class="ghost">取消</button><button data-a="done" class="mbtn">完成</button></div>`;
+  document.body.appendChild(el);document.body.classList.add('dressing','faceStudio');const v=$('#fsView');let drawing=false,last=null;
+  const pt=e=>{const r=v.getBoundingClientRect();return [Math.floor((e.clientX-r.left)/r.width*FACE_N),Math.floor((e.clientY-r.top)/r.height*FACE_N)];};
+  const stroke=(a,b)=>{const g=fsCanvas(FST.cur).getContext('2d');g.save();g.globalCompositeOperation=FST.tool==='erase'?'destination-out':'source-over';g.strokeStyle=FST.col;g.lineWidth=FST.size;g.lineCap='round';g.lineJoin='round';g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();g.restore();};
+  v.addEventListener('pointerdown',e=>{e.preventDefault();v.setPointerCapture(e.pointerId);const p=pt(e);
+    if(FST.tool==='pick'){const c=fsCanvas(FST.cur).getContext('2d').getImageData(p[0],p[1],1,1).data;if(c[3]>10){FST.col='#'+[c[0],c[1],c[2]].map(x=>x.toString(16).padStart(2,'0')).join('');$('#fsCol').value=FST.col;}return;}
+    fsPush();if(FST.tool==='fill'){fsFill(p[0],p[1]);FST.dirty=true;fsPaint();return;}drawing=true;last=p;stroke(p,[p[0]+.01,p[1]]);fsPaint();});
+  v.addEventListener('pointermove',e=>{if(!drawing)return;const p=pt(e);stroke(last,p);last=p;fsPaint();});
+  const end=()=>{if(drawing){drawing=false;FST.dirty=true;fsPaint();}};v.addEventListener('pointerup',end);v.addEventListener('pointercancel',end);
+  $('#fsCol').addEventListener('input',e=>{FST.col=e.target.value;if(FST.tool==='erase'||FST.tool==='pick')FST.tool='pen';fsUi();});
+  el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.x){FST.cur=b.dataset.x;fsUi();fsPaint();}if(b.dataset.t){FST.tool=b.dataset.t;fsUi();}if(b.dataset.s){FST.size=+b.dataset.s;fsUi();}if(b.dataset.c){FST.col=b.dataset.c;$('#fsCol').value=FST.col;if(FST.tool!=='fill')FST.tool='pen';fsUi();}
+    const a=b.dataset.a;if(a==='undo')fsUndo(false);if(a==='redo')fsUndo(true);if(a==='clear'){fsPush();fsCanvas(FST.cur).getContext('2d').clearRect(0,0,FACE_N,FACE_N);FST.dirty=true;fsPaint();}
+    if(a==='copy'&&FST.cur!=='n'){fsPush();const g=fsCanvas(FST.cur).getContext('2d');g.clearRect(0,0,FACE_N,FACE_N);g.drawImage(fsCanvas('n'),0,0);FST.dirty=true;fsPaint();}
+    if(a==='guide'){FST.showGuide=FST.showGuide===false;fsPaint();}if(a==='rot'){FST.yaw+=Math.PI/4;}
+    if(a==='cancel')fsClose(false);if(a==='done')fsClose(true);if(a==='off'){ask('畫面工作室','刪除自己畫嘅面，用返遊戲預設五官？',['刪除','唔好'],k=>{if(k===0){faceStore({});fsClose(false,true);toast('用返預設五官');}});}});
+  fsPaint();}
+function fsUi(){const el=$('#faceStudio');if(!el)return;el.querySelectorAll('[data-x]').forEach(b=>b.classList.toggle('on',b.dataset.x===FST.cur));el.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===FST.tool));el.querySelectorAll('[data-s]').forEach(b=>b.classList.toggle('on',+b.dataset.s===FST.size));}
+function fsClose(keep,wiped){const el=$('#faceStudio');if(el)el.remove();document.body.classList.remove('faceStudio');if(!PLAYER.dress)document.body.classList.remove('dressing');FST.on=false;FST.preview=false;
+  if(keep){const d={};for(const [k] of FACE_EX){const c=FST.cv[k];if(c&&!fsBlank(c))d[k]=c.toDataURL('image/png');}if(!d.n){toast('「平時」個樣要畫咗先儲得');}else{faceStore(d);toast('儲好咗你畫嘅面！遊戲會跟表情自動轉');try{faceSend();}catch(e){}}}
+  else if(!wiped)FST.saved=null;
+  if(PLAYER.p&&PLAYER.p.faceM){PLAYER.p.faceM.parent&&PLAYER.p.faceM.parent.remove(PLAYER.p.faceM);PLAYER.p.faceM=null;}PLAYER.p&&PLAYER.p.expr&&(PLAYER.p.expr.ft=0);applyOutfit();if(wiped)try{faceSend();}catch(e){}}
+{const _gb=gameBlocked;gameBlocked=function(){return FST.on||_gb();};}
+// camera: close on the face while painting
+{const _u=update;update=function(dt){const r=_u(dt);if(FST.on&&PLAYER.p){const h=PLAYER.p.J.head;h.rotation.set(0,0,0);PLAYER.p.J.neck.rotation.set(0,0,0);h.updateWorldMatrix(true,false);const hp=h.getWorldPosition(new THREE.Vector3());hp.y+=.12;const yaw=PLAYER.p.g.rotation.y+FST.yaw;const wide=innerWidth>760;
+    const dist=wide?.95:1.35,dy=wide?0:-.42;camera.position.set(hp.x+Math.sin(yaw)*dist+(wide?Math.cos(yaw)*.32:0),hp.y,hp.z+Math.cos(yaw)*dist-(wide?Math.sin(yaw)*.32:0));camera.lookAt(hp.x+(wide?Math.cos(yaw)*.32:0),hp.y+dy,hp.z-(wide?Math.sin(yaw)*.32:0));}return r;};}
+// entry points: a button in the dressing room
+{const _rd=renderDress;renderDress=function(){const r=_rd.apply(this,arguments);try{const b=document.querySelector('#dress .dbtm');if(b&&!$('#dFace')){const x=document.createElement('button');x.id='dFace';x.className='mbtn ghost';x.textContent='🎨 畫面';x.onclick=()=>{closeDress(true);setTimeout(fsOpen,60);};b.insertBefore(x,b.firstChild);}}catch(e){}return r;};}
+function v9dBoot(){const st=document.createElement('style');st.textContent=`
+#faceStudio{position:fixed;z-index:6;right:calc(12px + env(safe-area-inset-right,0px));top:calc(12px + env(safe-area-inset-top,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(400px,46vw);padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto;pointer-events:auto}
+#faceStudio .fsh b{display:block;font-family:var(--f-sign);font-size:22px;color:var(--amber)}#faceStudio .fsh span{font-size:12px;color:var(--dim)}
+#fsView{width:100%;aspect-ratio:1;border-radius:12px;touch-action:none;cursor:crosshair;border:2px solid var(--line);background:#e8bf98}
+#faceStudio button{font:800 13px var(--f-ui);cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);border-radius:9px;padding:6px 9px}#faceStudio button.on{background:var(--amber);color:#111;border-color:transparent}
+#faceStudio .fsx,#faceStudio .fst,#faceStudio .fsb{display:flex;flex-wrap:wrap;gap:6px}#faceStudio .fss{display:flex;gap:4px;margin-left:auto}#faceStudio .fss button{width:34px;display:grid;place-items:center;padding:6px 0}#faceStudio .fss i{display:block;border-radius:50%;background:currentColor}
+#faceStudio .fsc{display:flex;flex-wrap:wrap;gap:6px;align-items:center}#faceStudio .fsc button{width:28px;height:28px;border-radius:50%;padding:0;border:2px solid rgba(255,255,255,.4)}#fsCol{width:34px;height:30px;border:0;background:none;padding:0}
+#faceStudio .mbtn{background:var(--amber);color:#111;border:0;margin-left:auto}#faceStudio .ghost{background:transparent}
+body.faceStudio .hud,body.faceStudio #mini,body.faceStudio #labels,body.faceStudio #touch,body.faceStudio #emoBtn{display:none!important}
+@media (max-width:760px){#faceStudio{left:8px;right:8px;top:auto;width:auto;max-height:60vh;padding:10px;gap:6px}#fsView{width:min(100%,34vh);align-self:center}#faceStudio .fsh span{display:none}}`;document.head.appendChild(st);
+  try{if(faceHas()&&PLAYER.p&&PLAYER.p.rig)applyOutfit();}catch(e){}}
 
 
 
