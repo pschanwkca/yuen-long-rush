@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -8320,13 +8320,17 @@ function v7fBoot(){rmApi();}
 // depth of field, light shafts and wet-ground reflections. Everything reads the one depth buffer of the main render. =====
 const LOOK={lv:-1,ok:true,pass:null,depth:null,focus:8,dof:0,blob:null,err:null};
 const LOOK_FRAG=`#include <packing>
-uniform sampler2D tDiffuse,tDepth;uniform vec2 px;uniform float cn,cf,inkW,aoR,dofK,dofMax,focus,wet,rays;uniform vec2 sunUv;uniform vec3 sunCol;uniform mat4 proj,projInv,camW;uniform vec3 upV;varying vec2 vUv;
+uniform sampler2D tDiffuse,tDepth;uniform vec2 px;uniform float cn,cf,inkW,aoR,dofK,dofMax,focus,wet,rays;uniform vec2 sunUv;uniform vec3 sunCol;uniform mat4 proj,projInv,camW;uniform vec3 upV;uniform float uT,under,wl,rain;varying vec2 vUv;
 float rawD(vec2 u){return texture2D(tDepth,u).x;}
 float vz(float d){return -perspectiveDepthToViewZ(d,cn,cf);}
 vec3 vpos(vec2 u,float d){vec4 p=projInv*vec4(u*2.-1.,d*2.-1.,1.);return p.xyz/p.w;}
 float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
 float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
-void main(){vec2 uv=vUv;float d0=rawD(uv);bool sky=d0>=.99999;float z0=sky?cf:vz(d0);vec3 c=texture2D(tDiffuse,uv).rgb;
+void main(){vec2 uv=vUv;
+#ifdef UWW
+ if(under>0.)uv+=vec2(sin(uv.y*28.+uT*2.1),cos(uv.x*22.+uT*1.7))*.0022*under;
+#endif
+ float d0=rawD(uv);bool sky=d0>=.99999;float z0=sky?cf:vz(d0);vec4 c4=texture2D(tDiffuse,uv);vec3 c=c4.rgb;float wm=c4.a<.02?1.:0.;
 #ifdef DOF
  float coc=sky?1.:clamp(abs(z0-focus)/max(z0,1.)*dofK,0.,1.);
  if(coc>.02){vec3 acc=c;float wsum=1.;float r=coc*dofMax;
@@ -8338,35 +8342,48 @@ void main(){vec2 uv=vUv;float d0=rawD(uv);bool sky=d0>=.99999;float z0=sky?cf:vz
 #endif
  vec3 P=sky?vec3(0):vpos(uv,d0);
  vec3 N=vec3(0,0,1);
-#if defined(AO)||defined(SSR)
+#if defined(AO)||defined(SSR)||defined(PUD)
  if(!sky){vec3 px1=vpos(uv+vec2(px.x,0),rawD(uv+vec2(px.x,0)))-P,py1=vpos(uv+vec2(0,px.y),rawD(uv+vec2(0,px.y)))-P;vec3 px0=P-vpos(uv-vec2(px.x,0),rawD(uv-vec2(px.x,0))),py0=P-vpos(uv-vec2(0,px.y),rawD(uv-vec2(0,px.y)));
    vec3 ex=abs(px0.z)<abs(px1.z)?px0:px1,ey=abs(py0.z)<abs(py1.z)?py0:py1;N=normalize(cross(ex,ey));}
 #endif
 #ifdef AO
  if(!sky){float occ=0.;float rad=aoR*proj[1][1]*.5/max(z0,1.);for(int i=0;i<AO;i++){float a=float(i)*2.39996+hash(uv*3.1)*6.28;float rr=(float(i)+.5)/float(AO);vec2 su=uv+vec2(cos(a),sin(a))*rad*rr*vec2(px.x/px.y,1.);
    float sd=rawD(su);if(sd>=.99999)continue;vec3 S=vpos(su,sd)-P;float l=length(S);occ+=max(0.,dot(N,S/l)-.08)*(1.-smoothstep(.0,aoR*1.4,l));}
-  occ=clamp(occ/float(AO)*1.9,0.,.75);c*=1.-occ*(1.-smoothstep(80.,220.,z0));}
+  occ=clamp(occ/float(AO)*1.9,0.,.75);c*=1.-occ*(1.-smoothstep(80.,220.,z0))*(1.-wm*.7);}
+#endif
+float pk=0.;
+#ifdef PUD
+ if(!sky&&wm<.5&&wet>.05&&dot(N,upV)>.85&&z0<120.){vec3 W0=(camW*vec4(P,1.)).xyz;float pud=smoothstep(.45,.62,vn(W0.xz*.18)*.65+vn(W0.xz*.6)*.35);pk=wet*mix(.25,1.,pud);c=mix(c,c*.78,pk*.4);
+  if(rain>.05&&pud>.5){vec2 g=W0.xz*1.2;vec2 id=floor(g);vec2 f=fract(g)-.5-(vec2(hash(id+3.1),hash(id+7.7))-.5)*.5;float on=step(1.-rain*.5,hash(id+1.3));float ph=fract(uT*(.8+hash(id+5.)*.6)+hash(id));float rr=ph*.34;float ring=(1.-smoothstep(.0,.03,abs(length(f)-rr)))*(1.-ph)*on;c+=vec3(.35,.4,.45)*ring*rain*pud*(1.-smoothstep(10.,40.,z0));}}
 #endif
 #ifdef SSR
- if(!sky&&wet>.05&&dot(N,upV)>.85&&z0<90.){vec3 V=normalize(P);vec3 Rd=reflect(V,N);vec3 Q=P;vec3 hit=vec3(0);float f=0.;float st=.6+z0*.02;
+ if(!sky&&(pk>.02||wm>.5)&&dot(N,upV)>.8&&z0<140.){vec3 V=normalize(P);vec3 Rd=reflect(V,N);vec3 Q=P;vec3 hit=vec3(0);float f=0.;float st=.6+z0*.02;
   for(int i=0;i<24;i++){Q+=Rd*st;st*=1.12;vec4 cp=proj*vec4(Q,1.);vec2 su=cp.xy/cp.w*.5+.5;if(su.x<0.||su.x>1.||su.y<0.||su.y>1.)break;float sd=rawD(su);if(sd>=.99999)continue;float sz=vz(sd);if(-Q.z>sz&&-Q.z-sz<st*2.5){hit=texture2D(tDiffuse,su).rgb;f=(1.-smoothstep(.7,1.,max(abs(su.x-.5),abs(su.y-.5))*2.));break;}}
-  vec3 W=(camW*vec4(P,1.)).xyz;float pud=smoothstep(.45,.62,vn(W.xz*.18)*.65+vn(W.xz*.6)*.35);float fr=.05+.45*pow(1.-max(0.,dot(-V,N)),4.);float k=wet*mix(.25,1.,pud);c=mix(c,c*.82,k*.35);c=mix(c,hit,f*fr*k);}
+  float fr=.05+.45*pow(1.-max(0.,dot(-V,N)),4.);float k=max(pk,wm*.8);c=mix(c,hit,f*fr*k);}
 #endif
  // ink: silhouettes from depth jumps, creases from a break in the plane (1/z is planar in screen space)
  if(!sky&&inkW>0.){float e=0.;vec2 o1=vec2(px.x,0)*inkW,o2=vec2(0,px.y)*inkW;
    float a1=rawD(uv+o1),a2=rawD(uv-o1),b1=rawD(uv+o2),b2=rawD(uv-o2);
    float za1=a1>=.99999?cf:vz(a1),za2=a2>=.99999?cf:vz(a2),zb1=b1>=.99999?cf:vz(b1),zb2=b2>=.99999?cf:vz(b2);
    float jump=max(max(za1,za2),max(zb1,zb2))-z0;float tol=.05*z0+.25;e=max(e,step(tol,jump));
-   float iz=1./z0;float cx=abs(1./za1+1./za2-2.*iz)/iz,cy=abs(1./zb1+1./zb2-2.*iz)/iz;e=max(e,smoothstep(.03,.07,min(max(cx,cy),1.))*(1.-smoothstep(25.,60.,z0)));
+   float iz=1./z0;float cx0=abs(1./za1+1./za2-2.*iz)/iz,cy=abs(1./zb1+1./zb2-2.*iz)/iz;float cx=cx0*(1.-wm);cy*=1.-wm;e=max(e,smoothstep(.03,.07,min(max(cx,cy),1.))*(1.-smoothstep(25.,60.,z0)));
    float fade=(1.-smoothstep(70.,240.,z0))*(1.-coc*.8);c=mix(c,c*.08,e*fade*.92);}
 #ifdef RAYS
  if(rays>0.){vec2 dl=(sunUv-uv);float L=0.;vec2 su=uv;float dec=1.;for(int i=0;i<28;i++){su+=dl/28.;float sd=rawD(clamp(su,0.,1.));L+=(sd>=.99999?1.:0.)*dec;dec*=.965;}
   L/=28.;float dist=length((uv-sunUv)*vec2(1.,px.x/px.y));c+=sunCol*L*rays*(1.-smoothstep(.0,.9,dist))*.55;}
 #endif
+ if(under>0.){float dist=sky?40.:z0;vec3 W1=sky?vec3(0):(camW*vec4(P,1.)).xyz;c*=mix(vec3(1.),vec3(.5,.82,.78),under);
+#ifdef UWC
+  if(!sky&&W1.y<wl){vec2 q=W1.xz*1.1+vec2(uT*.35,uT*.22);float a=vn(q)+vn(q*1.9-uT*.3);float cs=pow(1.-abs(a-1.),6.);c+=vec3(.3,.42,.36)*cs*under*(1.-smoothstep(3.,16.,dist));}
+#endif
+#ifdef UWW
+  float sh=pow(vn(vec2(uv.x*7.+uv.y*1.6+uT*.12,uT*.15)),5.)*smoothstep(.2,1.,uv.y);c+=vec3(.25,.38,.34)*sh*under*1.4;
+#endif
+ }
  gl_FragColor=vec4(c,1.);}`;
-function lookMake(lv){const D={};if(lv>=2){D.AO=lv>=3?14:8;D.DOF=lv>=3?14:8;}if(lv>=3){D.SSR=1;D.RAYS=1;}
+function lookMake(lv){const D={};if(lv>=1){D.PUD=1;D.UWC=1;}if(lv>=2){D.AO=lv>=3?14:8;D.DOF=lv>=3?14:8;D.UWW=1;}if(lv>=3){D.SSR=1;D.RAYS=1;}
   return new THREE.ShaderPass({defines:D,uniforms:{tDiffuse:{value:null},tDepth:{value:null},px:{value:new THREE.Vector2()},cn:{value:.1},cf:{value:1000},inkW:{value:1},aoR:{value:1.4},dofK:{value:0},dofMax:{value:.006},focus:{value:8},
-      wet:{value:0},rays:{value:0},sunUv:{value:new THREE.Vector2(.5,.8)},sunCol:{value:new THREE.Color(1,.85,.6)},proj:{value:new THREE.Matrix4()},camW:{value:new THREE.Matrix4()},projInv:{value:new THREE.Matrix4()},upV:{value:new THREE.Vector3(0,1,0)}},
+      wet:{value:0},rays:{value:0},sunUv:{value:new THREE.Vector2(.5,.8)},sunCol:{value:new THREE.Color(1,.85,.6)},proj:{value:new THREE.Matrix4()},camW:{value:new THREE.Matrix4()},projInv:{value:new THREE.Matrix4()},upV:{value:new THREE.Vector3(0,1,0)},uT:{value:0},under:{value:0},wl:{value:0},rain:{value:0}},
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:LOOK_FRAG});}
 // one composer on every level: main render (with depth) -> look pass -> bloom (medium and up) -> FINAL grade
 setupPost=function(){composer=null;bloom=null;finalPass=null;LOOK.pass=null;LOOK.depth=null;const lv=QV.lv<0?qAutoStart():QV.lv;LOOK.lv=lv;
@@ -8412,12 +8429,98 @@ function lookTick(){const p=LOOK.pass;if(!p)return;const U=p.uniforms;const sz=r
   const P=PLAYER,fx=P.car?P.car.x:P.x,fz=P.car?P.car.z:P.z,fy=(P.car?(P.car.y||0)+1:P.y+1.2);const fd=camera.position.distanceTo(_lkV.set(fx,fy,fz));LOOK.focus+=(fd-LOOK.focus)*.25;U.focus.value=LOOK.focus;
   // depth of field: light while driving or fighting, stronger in dialogue and menus
   let k=LOOK.lv>=3?.5:LOOK.lv>=2?.32:0;if(P.car)k*=.35;else if(typeof FIGHT!=='undefined'&&FIGHT&&FIGHT.on)k*=.5;if(typeof dlgQ!=='undefined'&&dlgQ&&dlgQ.length)k*=2.2;if(!started)k*=1.5;LOOK.dof+=(k-LOOK.dof)*.1;U.dofK.value=LOOK.dof;U.dofMax.value=LOOK.lv>=3?.009:.006;
-  U.wet.value=typeof Wx!=='undefined'?Wx.wet:0;U.aoR.value=LOOK.lv>=3?1.6:1.3;
+  U.wet.value=typeof Wx!=='undefined'?Wx.wet:0;U.rain.value=typeof Wx!=='undefined'?Wx.rain:0;U.uT.value=performance.now()/1000%1000;U.under.value=(typeof NW!=='undefined'&&NW.under)?1:0;U.wl.value=LOOK.wl||0;U.aoR.value=LOOK.lv>=3?1.6:1.3;
   if(LOOK.lv>=3){const sd=_lkS.copy(sun.position).sub(sun.target.position).normalize();const up=sd.y;_lkV.copy(camera.position).addScaledVector(sd,800).project(camera);
     const vis=_lkV.z<1&&up>.02?1:0;U.sunUv.value.set(_lkV.x*.5+.5,_lkV.y*.5+.5);const on=vis*(1-Math.min(1,Math.max(0,Math.hypot(_lkV.x,_lkV.y)-1.1)))*Math.min(1,up*5)*(1-(typeof Wx!=='undefined'?Wx.cloud*.7:0));U.rays.value=on;
     if(sun.color)U.sunCol.value.copy(sun.color);}}
 {const _u=update;update=function(dt){const r=_u(dt);try{lookTick();lookBlobs();}catch(e){if(!LOOK.err){LOOK.err=String(e);console.error('look tick',e);}}return r;};}
 function v8aBoot(){try{lookBlobInit();}catch(e){console.error('blob',e);}if(!composer)try{setupPost();}catch(e){}}
+
+// ===== v19.1 water: see-through animated water for the nullah, ponds, wetland and Deep Bay; waves follow wind and rain,
+// rain rings, foam along the walls, sun glints, caustics on the channel bed, and a proper underwater view when you dive =====
+const WAT={U:null,mats:[],caus:null,drops:null,dropT:0,lp:null,wasUnder:false,splT:0,err:null};
+function watUniforms(){if(WAT.U)return WAT.U;WAT.U={uT:{value:0},uSun:{value:new THREE.Vector3(0,1,0)},uSunC:{value:new THREE.Color(1,1,1)},uTop:{value:new THREE.Color(.3,.5,.8)},uHor:{value:new THREE.Color(.7,.8,.9)},
+  uRain:{value:0},uWind:{value:.4},uQ:{value:1},uNight:{value:0}};return WAT.U;}
+const WAT_VS=`uniform float uRise;varying vec3 vW;varying vec2 vUv2;
+#include <fog_pars_vertex>
+void main(){vec3 transformed=position;transformed.y+=uRise;vUv2=uv;vec4 wp=modelMatrix*vec4(transformed,1.);vW=wp.xyz;vec4 mvPosition=viewMatrix*wp;gl_Position=projectionMatrix*mvPosition;
+#include <fog_vertex>
+}`;
+const WAT_FS=`uniform float uT,uRain,uWind,uQ,uNight,uAlpha,uFlowU,uFoam,uDeepK;uniform vec3 uSun,uSunC,uTop,uHor,uCol,uDeep;varying vec3 vW;varying vec2 vUv2;
+#include <common>
+#include <fog_pars_fragment>
+float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y);}
+float wv(vec2 p){vec2 fl=uFlowU>0.?vec2(0.,uT*uFlowU):vec2(uT*.35,uT*.17);return n2(p*.45+fl)*.6+n2(p*1.3-fl*1.7+vec2(3.1,7.7))*.4;}
+void main(){vec2 p=uFlowU>0.?vec2(vUv2.x*6.,vUv2.y*6.):vW.xz;float amp=.35+uWind*.9+uRain*.4;float e=.12;
+  float h=wv(p),hx=wv(p+vec2(e,0)),hz=wv(p+vec2(0,e));vec3 N=normalize(vec3(-(hx-h)/e*amp*.35,1.,-(hz-h)/e*amp*.35));
+  float ring=0.;
+  if(uRain>.03&&uQ>=1.){vec2 g=vW.xz*1.1;vec2 id=floor(g);vec2 f=fract(g)-.5-(vec2(h2(id+3.1),h2(id+7.7))-.5)*.5;float on=step(1.-uRain*.6,h2(id+1.3));float ph=fract(uT*(.8+h2(id+5.)*.6)+h2(id));float r=ph*.36;float d=length(f)-r;ring=(1.-smoothstep(0.,.03,abs(d)))*(1.-ph)*on;N=normalize(N+vec3(f.x,0.,f.y)*ring*2.);}
+  vec3 V=normalize(cameraPosition-vW);bool up=cameraPosition.y>=vW.y;if(!up)N=-N;
+  float ndv=max(dot(N,V),0.);float fres=.08+.92*pow(1.-ndv,4.);
+  vec3 Rv=reflect(-V,N);vec3 sky=mix(uHor,uTop,pow(clamp(Rv.y,0.,1.),.5));
+  float dist=length(cameraPosition-vW);
+  vec3 base=mix(uCol,uDeep,clamp(uDeepK+.25*(1.-ndv),0.,1.));float amb=clamp(dot(uHor,vec3(.3,.59,.11))*2.2,.12,1.);base*=amb;
+  vec3 col=mix(base,sky,fres*.8);
+  // cel bands on the wave tops
+  float crest=smoothstep(.62,.66,h);col=mix(col,col*1.25+.06,crest*.7);float trough=1.-smoothstep(.3,.34,h);col*=1.-trough*.12;
+  col+=vec3(.75,.8,.82)*ring*.6;
+  if(uFoam>0.&&uFlowU>0.){float ed=min(vUv2.x,1.-vUv2.x);float fo=(1.-smoothstep(.0,.07,ed))*(.55+.45*n2(vec2(vUv2.x*30.,vUv2.y*14.-uT*uFlowU*2.)));col=mix(col,vec3(.92,.96,.95),fo*uFoam);}
+  if(uQ>=2.&&up){float sp=pow(max(dot(reflect(-uSun,N),V),0.),180.);col+=uSunC*step(.45,sp)*1.4*(1.-uNight);}
+  float a=up?mix(uAlpha,.96,fres):.88;
+  if(!up){col=mix(uCol*.7*amb,sky*1.3+.1,pow(ndv,2.));float sn=pow(n2(vW.xz*1.5+uT*.4),3.);col+=vec3(.5,.6,.55)*sn*.5;}
+  gl_FragColor=vec4(col,a);
+#include <tonemapping_fragment>
+#include <encodings_fragment>
+#include <fog_fragment>
+}`;
+function watMat(kind){const U=watUniforms();const P={nullah:{col:'#3a7a6c',deep:'#1d4a44',alpha:.6,flow:.12,foam:.8,dk:.35},pond:{col:'#3b6b4f',deep:'#22412f',alpha:.78,flow:0,foam:0,dk:.55},
+    wet:{col:'#3e6e66',deep:'#24453f',alpha:.7,flow:0,foam:0,dk:.45},sea:{col:'#3f7486',deep:'#1f4656',alpha:.9,flow:0,foam:0,dk:.6}}[kind];
+  const m=new THREE.ShaderMaterial({uniforms:Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog),{uRise:{value:0},uCol:{value:lin(P.col)},uDeep:{value:lin(P.deep)},uAlpha:{value:P.alpha},uFlowU:{value:P.flow},uFoam:{value:P.foam},uDeepK:{value:P.dk}},U),
+    vertexShader:WAT_VS,fragmentShader:WAT_FS,transparent:true,depthWrite:true,side:THREE.DoubleSide,fog:true,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
+  // keep the colour blend but write alpha 0, so the look pass knows these pixels are water
+  m.blending=THREE.CustomBlending;m.blendSrc=THREE.SrcAlphaFactor;m.blendDst=THREE.OneMinusSrcAlphaFactor;m.blendSrcAlpha=THREE.ZeroFactor;m.blendDstAlpha=THREE.ZeroFactor;
+  m.userData.sh={uniforms:m.uniforms};m.userData.kind=kind;WAT.mats.push(m);return m;}
+// caustics on the channel bed
+function watBedCaustics(){const m=NUL.bm;if(!m||m.userData.caus)return;m.userData.caus=1;const U=watUniforms();
+  m.onBeforeCompile=sh=>{sh.uniforms.uT=U.uT;sh.uniforms.uQ=U.uQ;sh.uniforms.uSunC=U.uSunC;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWc;').replace('#include <project_vertex>','#include <project_vertex>\nvWc=(modelMatrix*vec4(transformed,1.)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWc;uniform float uT,uQ;uniform vec3 uSunC;float hc(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float nc(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hc(i),hc(i+vec2(1,0)),f.x),mix(hc(i+vec2(0,1)),hc(i+vec2(1,1)),f.x),f.y);}')
+      .replace('#include <dithering_fragment>','#include <dithering_fragment>\nif(uQ>=1.){vec2 q=vWc.xz*1.1+vec2(uT*.35,uT*.22);float a=nc(q)+nc(q*1.9-uT*.3);float cs=pow(1.-abs(a-1.),7.);gl_FragColor.rgb+=uSunC*cs*.22;}');};
+  m.customProgramCacheKey=()=>'bedcaus';m.needsUpdate=true;}
+// swap the old water materials for the new one
+function watInstall(){let n=0;const sw=(o,kind)=>{const m=watMat(kind);o.material=m;o.renderOrder=2;n++;return m;};
+  if(NUL.wMeshes&&NUL.wMeshes.length){let m=null;for(const o of NUL.wMeshes){if(!m)m=watMat('nullah');o.material=m;o.renderOrder=2;n++;}NUL.wm=m;}
+  if(typeof LCW!=='undefined'&&LCW.water)sw(LCW.water,'pond');
+  const wl=new Set((typeof WLP!=='undefined'&&WLP.waterMats)||[]);const cache=new Map();
+  scene.traverse(o=>{if(!o.isMesh||!o.material||!o.material.map||!wl.has(o.material.map))return;const sea=o.material.opacity>=1&&!o.material.transparent;const k=sea?'sea':'wet';let m=cache.get(o.material);if(!m){m=watMat(k);cache.set(o.material,m);}o.material=m;o.renderOrder=2;n++;});
+  try{watBedCaustics();}catch(e){}WAT.n=n;}
+// lens drops after coming up for air
+function watDrops(){if(WAT.drops)return WAT.drops;const c=document.createElement('canvas');c.id='lensDrops';c.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:0;transition:opacity .2s';document.body.appendChild(c);WAT.drops=c;return c;}
+function watDropsShow(){const c=watDrops();const w=c.width=Math.round(innerWidth/2),h=c.height=Math.round(innerHeight/2),g=c.getContext('2d');g.clearRect(0,0,w,h);
+  for(let i=0;i<46;i++){const x=Math.random()*w,y=Math.random()*h,r=3+Math.random()*14;const gr=g.createRadialGradient(x-r*.3,y-r*.35,r*.1,x,y,r);gr.addColorStop(0,'rgba(255,255,255,.55)');gr.addColorStop(.5,'rgba(200,225,230,.18)');gr.addColorStop(.9,'rgba(40,60,70,.25)');gr.addColorStop(1,'rgba(40,60,70,0)');g.fillStyle=gr;g.beginPath();g.ellipse(x,y,r,r*1.15,0,0,6.3);g.fill();}
+  c.style.transition='opacity .15s';c.style.opacity='1';WAT.dropT=1.8;}
+// muffled sound under water
+function watAudio(under){if(!AU.ctx||!AU.master)return;if(!WAT.lp){try{const c=AU.ctx;const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=20000;AU.master.disconnect();AU.master.connect(lp);lp.connect(c.destination);WAT.lp=lp;}catch(e){WAT.lp=false;}}
+  if(WAT.lp){const t=AU.ctx.currentTime;WAT.lp.frequency.setTargetAtTime(under?550:20000,t,.08);}}
+function watTick(dt){const U=watUniforms();U.uT.value=(U.uT.value+dt)%1000;
+  const sd=_lkS.copy(sun.position).sub(sun.target.position).normalize();U.uSun.value.copy(sd);U.uSunC.value.copy(sun.color).multiplyScalar(Math.min(1.5,sun.intensity||1));
+  if(skyU&&skyU.top){U.uTop.value.copy(skyU.top.value);U.uHor.value.copy(skyU.hor.value);}
+  const wx=typeof Wx!=='undefined'?Wx:{rain:0,cloud:.2};U.uRain.value=wx.rain||0;U.uWind.value=Math.min(1,(wx.cloud||0)*.8+(wx.rain||0)*.4);U.uQ.value=Math.max(0,QV.lv);U.uNight.value=sd.y<.05?1:0;
+  // nullah rises after rain (v16.7 keeps NW.rise)
+  if(NUL.wm&&NUL.wm.uniforms&&NUL.wm.uniforms.uRise)NUL.wm.uniforms.uRise.value=(typeof NW!=='undefined'?NW.rise:0);
+  // underwater: water level for the look pass, sound, drops when surfacing
+  const under=typeof NW!=='undefined'&&NW.under;if(under){const q=nulAt(camera.position.x,camera.position.z);if(q)LOOK.wl=q.wl;}
+  if(under!==WAT.wasUnder){watAudio(under);if(!under&&WAT.wasUnder&&QV.lv>=2)watDropsShow();WAT.wasUnder=under;}
+  if(WAT.dropT>0){WAT.dropT-=dt;if(WAT.dropT<=0&&WAT.drops){WAT.drops.style.transition='opacity 1.2s';WAT.drops.style.opacity='0';}}
+  if(NW.fx)NW.fx.style.background='radial-gradient(ellipse at 50% 30%,rgba(80,150,140,.06),rgba(10,50,48,.32))';
+  // splashes through puddles (high and up): the player running, cars driving
+  if(QV.lv>=2&&wx.wet>.4&&started){WAT.splT-=dt;if(WAT.splT<=0){WAT.splT=.09;const P=PLAYER;
+    if(!P.car&&!P.riding&&!P.swim&&P.grounded&&P.spd>4&&!curRoom&&(P.y||0)<.6)for(let i=0;i<3;i++)emit(PSA,{x:P.x+R(-.2,.2),y:(P.y||0)+.05,z:P.z+R(-.2,.2),vx:R(-1,1),vy:R(1.5,2.6),vz:R(-1,1),life:.45,s0:.08,s1:.03,r:.8,g:.86,b:.9,a:.7});
+    let k=0;for(const v of vehicles){if(k>=6)break;const sp=Math.abs(v.speed||0);if(sp<6)continue;const dx=v.x-P.x,dz=v.z-P.z;if(dx*dx+dz*dz>40*40)continue;k++;const bx=v.x-Math.sin(v.h)*1.8,bz=v.z-Math.cos(v.h)*1.8;
+      for(const s2 of [-1,1])emit(PSA,{x:bx+Math.cos(v.h)*s2*.85,y:.1,z:bz-Math.sin(v.h)*s2*.85,vx:-Math.sin(v.h)*sp*.08+Math.cos(v.h)*s2*1.2,vy:R(1.2,2.4),vz:-Math.cos(v.h)*sp*.08-Math.sin(v.h)*s2*1.2,life:.5,s0:.12,s1:.05,r:.82,g:.88,b:.92,a:.6});}}}}
+{const _u=update;update=function(dt){const r=_u(dt);try{watTick(dt);}catch(e){if(!WAT.err){WAT.err=String(e);console.error('water',e);}}return r;};}
+function v8bBoot(){try{watInstall();}catch(e){WAT.err=String(e);console.error('water install',e);}}
 
 
 
