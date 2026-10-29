@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -9034,6 +9034,52 @@ body.faceStudio .hud,body.faceStudio #mini,body.faceStudio #labels,body.faceStud
 @media (max-width:760px){#faceStudio{left:8px;right:8px;top:auto;width:auto;max-height:60vh;padding:10px;gap:6px}#fsView{width:min(100%,34vh);align-self:center}#faceStudio .fsh span{display:none}}`;document.head.appendChild(st);
   try{if(faceHas()&&PLAYER.p&&PLAYER.p.rig)applyOutfit();}catch(e){}}
 
+// ===== v20.2 phones run cooler: frame-rate cap (30 / 45 / 60), automatic resolution, idle slow-down, cheaper far people and cars,
+// throttled minimap and labels, no 3D redraw under full-screen menus, and an on-screen performance readout =====
+const PERF={mob:isMobile||(typeof LITE!=='undefined'&&LITE.mob),lt:0,scale:1,base:0,win:0,wf:0,good:0,fps:0,ms:0,lastIn:performance.now(),step:null,mmT:0,lbF:0,el:null,calls:0};
+if(SET.fpsCap==null)SET.fpsCap=PERF.mob?'30':'60';if(SET.perfHud==null)SET.perfHud=false;
+PERF.step=PERF.mob?1/60:null;
+function perfCap(){let c=+SET.fpsCap||60;const P=PLAYER;
+  // standing still for 30 s with nothing open: 20 fps until you move again
+  if(started&&!P.car&&(P.spd||0)<.1&&!modal&&!mapOpen&&performance.now()-PERF.lastIn>30000&&!(typeof MP!=='undefined'&&MP.on))c=Math.min(c,20);
+  return c;}
+for(const ev of ['keydown','pointerdown','touchstart','wheel'])addEventListener(ev,()=>{PERF.lastIn=performance.now();},{passive:true,capture:true});
+// full-screen menus: the 3D view behind them is redrawn only a few times a second
+function perfQuietRender(){if(PLAYER.dress||(typeof FST!=='undefined'&&FST.on)||(typeof RKT!=='undefined'&&RKT.on))return false;return !!(mapOpen||(modal&&modal!=='region'));}
+frame=function(now){requestAnimationFrame(frame);const cap=perfCap();
+  if(cap<59&&now-PERF.lt<1000/cap-1.5)return;
+  const quiet=perfQuietRender();if(quiet&&now-PERF.lt<250)return;
+  PERF.lt=now;const t0=performance.now();const dt=Math.min(.05,(now-last)/1000);last=now;
+  try{renderer.info.autoReset=false;renderer.info.reset();}catch(e){}
+  update(dt);render();PERF.ms=PERF.ms*.9+(performance.now()-t0)*.1;PERF.calls=renderer.info.render.calls;perfWindow(now,cap,quiet);};
+// automatic resolution: drop it when the phone falls behind, raise it back when there is room
+function perfApplyRes(){if(!PERF.base)return;const pr=Math.max(.35,PERF.base*PERF.scale);if(Math.abs(renderer.getPixelRatio()-pr)<.01)return;renderer.setPixelRatio(pr);renderer.setSize(innerWidth,innerHeight);if(composer){composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight);}}
+{const _aq=applyQuality;applyQuality=function(lv,force){const r=_aq(lv,force);try{PERF.base=renderer.getPixelRatio();perfApplyRes();}catch(e){}return r;};}
+function perfWindow(now,cap,quiet){if(!PERF.win){PERF.win=now;PERF.wf=0;}PERF.wf++;const span=now-PERF.win;if(span<2000)return;PERF.fps=PERF.wf*1000/span;PERF.win=now;PERF.wf=0;
+  if(quiet||!started||!PERF.mob||cap<=20)return perfHud();
+  if(PERF.fps<cap*.85&&PERF.scale>.55){PERF.scale=Math.max(.55,PERF.scale-.1);PERF.good=0;perfApplyRes();}
+  else if(PERF.fps>=cap*.97){if(++PERF.good>=3&&PERF.scale<1){PERF.scale=Math.min(1,PERF.scale+.05);PERF.good=0;perfApplyRes();}}else PERF.good=0;perfHud();}
+function perfHud(){if(!SET.perfHud){if(PERF.el)PERF.el.hidden=true;return;}let el=PERF.el;if(!el){el=document.createElement('div');el.id='perfHud';el.className='hud panel';document.body.appendChild(el);PERF.el=el;}el.hidden=false;
+  const mem=performance.memory?' ・記憶體 '+Math.round(performance.memory.usedJSHeapSize/1e6)+'MB':'';el.innerHTML=`<b>${Math.round(PERF.fps)}</b> FPS／上限 ${perfCap()}<br>每格 ${PERF.ms.toFixed(1)} ms・解像度 ${Math.round(PERF.scale*100)}%<br>畫 ${PERF.calls} 次・人 ${RG.active||0}${mem?'<br>'+mem.slice(2):''}`;}
+// minimap 10 times a second, labels every second frame (phones, or any cap under 60)
+{const _mm=minimapDraw;minimapDraw=function(){const lite=PERF.mob||(+SET.fpsCap||60)<60;if(lite){const t=performance.now();if(t-PERF.mmT<100)return;PERF.mmT=t;}return _mm.apply(this,arguments);};}
+{const _lb=labelsUpdate;labelsUpdate=function(){if(PERF.mob&&(PERF.lbF++&1))return;return _lb.apply(this,arguments);};}
+// far people and traffic think less often
+{const _pu=pedUpdate;pedUpdate=function(p,dt){if(p&&p.g&&!p.react&&!p.headless&&!(p.down>0)){const dx=p.g.position.x-camera.position.x,dz=p.g.position.z-camera.position.z,d2=dx*dx+dz*dz;const k=d2>110*110?6:d2>60*60?2:1;
+    if(k>1){p._pa=(p._pa||0)+dt;p._pf=((p._pf||0)+1)%k;if(p._pf)return;dt=Math.min(.3,p._pa);p._pa=0;}}return _pu(p,dt);};}
+{const _tu=trafficUpdate;trafficUpdate=function(v,dt){if(v&&v!==PLAYER.car&&!v.script){const dx=v.x-camera.position.x,dz=v.z-camera.position.z,d2=dx*dx+dz*dz;if(d2>140*140){v._ta=(v._ta||0)+dt;v._tf=((v._tf||0)+1)%3;if(v._tf)return;dt=Math.min(.2,v._ta);v._ta=0;}}return _tu(v,dt);};}
+// people far away are not drawn at all (phones 75 m, computers 160 m)
+{const _rt=rgTick;rgTick=function(dt){const r=_rt(dt);const cull=PERF.mob?75:160,c2=cull*cull,cx=camera.position.x,cz=camera.position.z;const me=PLAYER.p;
+  for(const p of RG.list){if(!p.R0||p===me)continue;const g=p.g;const x=g.matrixWorld.elements[12],z=g.matrixWorld.elements[14];const v=((x-cx)**2+(z-cz)**2)<c2;if(p.R0.visible!==v)p.R0.visible=v;}return r;};}
+// fewer people on the street on phones
+{const _sp=spawnPeds;spawnPeds=function(n,cx,cz){return _sp(PERF.mob?Math.round(n*.7):n,cx,cz);};}
+// settings: frame-rate cap and the performance readout
+{const _os=openSettings;openSettings=function(from,ageAsk){_os(from,ageAsk);try{if(!document.querySelector('[data-key="fpsCap"]')){const fp=document.querySelector('#modal [data-tg="fps"]');const row=fp&&(fp.closest('.srow')||fp.parentElement);const html=segRow('流暢度',{30:'省電：30 FPS，部機唔會咁熱',45:'平衡：45 FPS',60:'流暢：60 FPS，最食電'}[SET.fpsCap]||'','fpsCap',[['30','省電'],['45','平衡'],['60','流暢']])+tgRow('效能資訊','顯示 FPS、每格時間、解像度同畫咗幾多次','perfHud','g');
+    if(row)row.insertAdjacentHTML('afterend',html);}}catch(e){}};}
+function v9eBoot(){const st=document.createElement('style');st.textContent=`#perfHud{position:fixed;z-index:3;right:calc(12px + env(safe-area-inset-right,0px));top:calc(232px + env(safe-area-inset-top,0px));padding:5px 9px;font:700 10px/1.4 var(--f-ui);color:#cfe;pointer-events:none;max-width:200px;text-align:right}@media (min-width:761px){#perfHud{top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));right:calc(220px + env(safe-area-inset-right,0px))}}
+@media (max-width:760px){#emoBtn{left:auto!important;right:calc(28px + env(safe-area-inset-right,0px))!important;bottom:calc(262px + env(safe-area-inset-bottom,0px))!important;font-size:18px!important;padding:3px 8px!important}}#perfHud b{font-family:var(--f-num);font-size:16px;color:#7dffb0}`;document.head.appendChild(st);
+  try{PERF.base=renderer.getPixelRatio();}catch(e){}}
+
 
 
 /* ---------- loop ---------- */
@@ -9041,7 +9087,7 @@ let headSpot=null,last=performance.now(),acc=0,roadT=0;
 function update(dt){readInput();if(gameBlocked()){inp.x=inp.y=0;inp.run=inp.hb=false;}
   if(todT<1){todT=Math.min(1,todT+dt/1.6);applyTod(todT);if(todT>=1)envDirty=true;}
   if(envDirty){envDirty=false;rebuildEnv();}
-  acc+=dt;const STEP=1/120;let n=0;while(acc>=STEP&&n<12){if(PLAYER.car)driveStep(PLAYER.car,STEP);else if(!PLAYER.riding)walkStep(STEP);acc-=STEP;n++;}if(n>=12)acc=0;
+  acc+=dt;const STEP=(typeof PERF!=='undefined'&&PERF.step&&!PLAYER.car)?PERF.step:1/120;let n=0;while(acc>=STEP&&n<12){if(PLAYER.car)driveStep(PLAYER.car,STEP);else if(!PLAYER.riding)walkStep(STEP);acc-=STEP;n++;}if(n>=12)acc=0;
   for(const v of vehicles){if(v.ai)trafficUpdate(v,dt);else{if(v!==PLAYER.car){v.vx*=Math.exp(-2*dt);v.vz*=Math.exp(-2*dt);v.x+=v.vx*dt;v.z+=v.vz*dt;v.speed=v.vx*Math.sin(v.h)+v.vz*Math.cos(v.h);v.spin+=v.speed/v.wr*dt;}syncV(v);}
     const br=v.brakeOn;v.body.children.forEach(m=>{if(m.material===tailM||m.material===brakeM)m.material=br?brakeM:tailM;});}
   for(const t of lrts)lrtUpdate(t,dt);
