@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -9164,7 +9164,7 @@ function f2Slow(k,sec){F2.slow=k;F2.slowT=sec;}
 function f2GrabStart(){if(f2Blocked()||F2.grab||F2.mv)return;if(f2Wpn().gun)return;if(!f2Ok('grab')){toast('升到 Lv'+F2_UNLOCK.grab+' 解鎖擒拿');return;}const P=PLAYER;const t=f2Pick(1.9);if(!t){toast('行近啲先捉得到');return;}
   const dx=P.x-t.g.position.x,dz=P.z-t.g.position.z;const fwd=Math.sin(t.g.rotation.y)*dx+Math.cos(t.g.rotation.y)*dz;const behind=fwd<0;
   P.h=Math.atan2(-dx,-dz);F2.grab={t,time:0,behind};if(t.rig&&typeof grReact==='function')grReact(t,{t:5,hold:5,pain:1,el:[-1.6,-1.6],arm:[[-1.0,-.4],[-1.0,.4]]});if(behind){f2Start('choke');}else{sfx('hit',.4);toast('捉住咗！F 膝撞・G 扔出去・H 摔落地');}}
-function f2GrabAct(k){const g=F2.grab;if(!g||F2.mv)return;if(k==='F')f2Start('gknee');else if(k==='G'){const P=PLAYER;const fx=Math.sin(P.h),fz=Math.cos(P.h);const q={x:P.x+fx*2.2,z:P.z+fz*2.2};const q0={x:q.x,z:q.z};try{pushOut(q,.3);}catch(e){}f2Start(Math.hypot(q.x-q0.x,q.z-q0.z)>.05?'wall':'throw');}}
+function f2GrabAct(k){const g=F2.grab;if(!g||F2.mv)return;if(k==='F')f2Start('gknee');else if(k==='G'){const P=PLAYER;const fx=Math.sin(P.h),fz=Math.cos(P.h);const q={x:P.x+fx*2.2,z:P.z+fz*2.2};const q0={x:q.x,z:q.z};try{pushOut(q,.3,(P.y||0)+.05,.45);}catch(e){}f2Start(Math.hypot(q.x-q0.x,q.z-q0.z)>.05?'wall':'throw');}}
 // a grabbed passer-by stops following the pavement
 {const _pu=pedUpdate;pedUpdate=function(p,dt){if(F2.grab&&F2.grab.t===p)return;return _pu(p,dt);};}
 function f2GrabRelease(){const g=F2.grab;if(!g)return;F2.grab=null;if(g.t&&g.t.react)g.t.react.hold=0;}
@@ -9207,7 +9207,7 @@ function f2Tick(dt){const P=PLAYER;if(F2.comboT>0){F2.comboT-=dt;if(F2.comboT<=0
   if(def.grab&&!m.grabDone&&u>=.45){m.grabDone=1;f2Grabbed(def);if(def===MV.gknee){f2Hit(def,def.hits[0]);m.hit=1;}}
   if(def.pound&&P.grounded===false)F2.pound=true;
   // lunge forward during the strike, kept out of walls
-  const L=def.lunge;if(m.tgt&&u<L[1]&&m.tgt.g){const tp=m.tgt.g.position;P.h=Math.atan2(tp.x-P.x,tp.z-P.z);}if(L&&L[2]>0&&u>=L[0]&&u<=L[1]&&P.grounded!==false||L&&L[2]>0&&def.air&&u<=L[1]){const k=(m.lungeD||L[2])/((L[1]-L[0])*def.dur)*dt;const q={x:P.x+Math.sin(P.h)*k,z:P.z+Math.cos(P.h)*k};try{pushOut(q,.35);}catch(e){}P.x=q.x;P.z=q.z;}
+  const L=def.lunge;if(m.tgt&&u<L[1]&&m.tgt.g){const tp=m.tgt.g.position;P.h=Math.atan2(tp.x-P.x,tp.z-P.z);}if(L&&L[2]>0&&u>=L[0]&&u<=L[1]&&P.grounded!==false||L&&L[2]>0&&def.air&&u<=L[1]){const k=(m.lungeD||L[2])/((L[1]-L[0])*def.dur)*dt;const q={x:P.x+Math.sin(P.h)*k,z:P.z+Math.cos(P.h)*k};try{pushOut(q,.35,(P.y||0)+.05,.45);}catch(e){}P.x=q.x;P.z=q.z;}
   if(u>=1){F2.mv=null;if(def.fin&&F2.zoom0!=null){cam.zoom=F2.zoom0;F2.zoom0=null;}if(def.spin){P.h+=def.spin;f2SpinDone(def.spin);}else if(def.keys.some(k=>k[1].yaw))f2SpinDone(0);if(F2.buf){const b=F2.buf;F2.buf=null;f2Press(b);}}}
 function f2Pound(){const P=PLAYER;shake=.4;sfx('crash',.5);f2Hud(F2.combo+1+' 連擊！','重落地拳');for(const t of f2Targets()){const d=Math.hypot(t.g.position.x-P.x,t.g.position.z-P.z);if(d<3.6){HIT.part='torso';hitTarget(t,Math.round(34*powMul()));if(FIGHT.includes(t)){t.kx=(t.g.position.x-P.x)*3;t.kz=(t.g.position.z-P.z)*3;}else if(t.rig)t.down=Math.max(t.down||0,3);}}
   for(let i=0;i<14;i++){const a=i/14*TAU;try{emit(PSA,{x:P.x+Math.cos(a)*.6,y:(P.y||0)+.1,z:P.z+Math.sin(a)*.6,vx:Math.cos(a)*4,vy:.8,vz:Math.sin(a)*4,life:.6,s0:.3,s1:.9,r:.72,g:.7,b:.64,a:.6});}catch(e){}}F2.combo++;F2.comboT=2.5;}
@@ -9622,6 +9622,162 @@ function dt2Tick(dt){if(!DT2.built||!ARC.on||!ARC.M||ARC.M.g!=='cs')return;const
 {const _ap=arcPanel;arcPanel=function(){const r=_ap.apply(this,arguments);try{const m=$('#modal');if(m){m.innerHTML=m.innerHTML.replace('廢棄停車場・攻方埋炸彈、守方拆彈或者全殲對手。','赤沙古鎮・A／B 兩個炸彈點，長巷、小道、中路、隧道四條路。攻方埋炸彈、守方拆彈或者全殲對手。');}}catch(e){}return r;};}
 {const _go=arcGo;arcGo=function(d){if(d&&d.g==='cs'){const _f=fadeTo;fadeTo=function(t,cb,ms){fadeTo=_f;return _f(t==='反恐對戰・廢棄停車場'?'反恐對戰・赤沙古鎮':t,cb,ms);};}return _go(d);};}
 function v10cBoot(){const st=document.createElement('style');st.textContent=`.abuy kbd{font:800 11px var(--f-num);background:rgba(0,0,0,.25);border-radius:4px;padding:0 4px;margin-right:2px}`;document.head.appendChild(st);}
+
+// ===== v21.4 people react like people: stagger steps, knock-downs that topple with momentum (or slump against a wall),
+// gunshot wounds that bleed (clutch, limp, flee) before a collapse, writhing / crawling / trying to stand on the ground,
+// dazed fist knock-outs that get back up (and sometimes fight back), bystanders who cower, flee or stare,
+// a flinch on the player, darker and finer blood (18+ only), and fewer people on the street =====
+const HS={list:new Set(),drops:[],splats:[],err:null,near:45,fear:[],pf:null};
+const HS_Q=new THREE.Quaternion(),HS_Y=new THREE.Quaternion(),HS_AX=new THREE.Vector3(),HS_UP=new THREE.Vector3(0,1,0);
+function hsOk(t){return !!(t&&t.rig&&t.g&&!t.bossE&&!t.mpPid&&!t.isJesus&&(peds.includes(t)||COPS.includes(t)));}
+function hsNear(t){const p=t.g.position;return Math.hypot(p.x-PLAYER.x,p.z-PLAYER.z)<HS.near;}
+function hsPush(q,g){const x=q.x,z=q.z;try{pushOut(q,.3,(g.position.y||0)+.05,.45);}catch(e){}if(Math.hypot(q.x-x,q.z-z)>.8){q.x=g.position.x;q.z=g.position.z;}}
+function hsGround(x,z){return typeof TH==='function'?TH(x,z):0;}
+// ---------- the hit ----------
+{const _ht=hitTarget;hitTarget=function(t,dmg){if(!hsOk(t)||t.headless||t.crawl||(typeof FLY!=='undefined'&&FLY.some(f=>f.p===t)))return _ht.apply(this,arguments);
+  const part=HIT.part||'torso',gun=!!HIT.gun,explo=!!HIT.explo,w=HIT.w||WEAPONS[S.wpn];const hp0=t.hp??(COPS.includes(t)?120:100);const P=t.g.position;
+  const dx=P.x-PLAYER.x,dz=P.z-PLAYER.z,dd=Math.hypot(dx,dz)||1;const ux=dx/dd,uz=dz/dd;const st=t.hs;
+  const mul=gun?({head:3,torso:1,armL:.6,armR:.6,legL:.65,legR:.65}[part]||1):1;const close=w&&w.id==='shotgun'&&dd<6;
+  // a body shot that would kill becomes a wound the first time (head shots, blasts and point-blank shotguns still kill)
+  let d=dmg;const wasWounded=st&&st.mode==='wounded';
+  if(gun&&part!=='head'&&!explo&&!close&&!wasWounded&&!(st&&(st.mode==='writhe'||st.mode==='lie'||st.mode==='fall'))&&hp0-dmg*mul<=0&&dmg*mul<160){d=Math.max(1,(hp0-24)/mul);}
+  if(st&&st.mode==='writhe'){st.mode='dead';st.t=0;}
+  const r=_ht.call(this,t,d);
+  try{const near=hsNear(t);if(!near)return r;
+    if(gun&&brutalOn())hsWound(t,part,ux,uz);
+    hsFear(P.x,P.z,gun?20:10,gun,t);
+    const down=t.down>0&&(t.hp<=0||t.dead);
+    if(down){// undo the instant flat pose and let the body fall
+      const k=explo?2.2:close?1.8:gun?.9:part==='head'?1.2:1;hsFall(t,ux,uz,k,{gun,part,dead:!!t.dead,wounded:wasWounded});}
+    else if(gun&&part!=='head'&&t.hp>0&&t.hp<=30&&!wasWounded){hsStagger(t,ux,uz,.9);t.hs=Object.assign(t.hs||{},{mode:'wounded',part,bleed:t.hp/14,t:0,drip:0});HS.list.add(t);if(peds.includes(t)){t.flee=30;if(rnd()<.6)subtitle('途人',pick(['呀！！中咗槍！','救命呀！','好痛呀……','唔好開槍！']));}}
+    else{const kb=dmg/(gun?55:38)*(HIT_KB||1);hsStagger(t,ux,uz,Math.min(1.2,kb));}}catch(e){if(!HS.err){HS.err=String(e);console.error('hs hit',e);}}
+  return r;};}
+let HIT_KB=1;
+// heavy kicks and finishers push harder
+{const _fh=typeof f2Hit==='function'?f2Hit:null;if(_fh){f2Hit=function(def,h){HIT_KB=def.heavy?1.8:1;try{return _fh(def,h);}finally{HIT_KB=1;}};}}
+// ---------- staggering on your feet ----------
+function hsStagger(t,ux,uz,k){if(!t.hs)t.hs={mode:'ok'};const s=t.hs;s.bx=(s.bx||0)+ux*k;s.bz=(s.bz||0)+uz*k;s.sv=Math.max(s.sv||0,k*2.4);s.ux=ux;s.uz=uz;s.st=.6+k*.5;HS.list.add(t);
+  const bal=Math.hypot(s.bx,s.bz);if(bal>1.55&&s.mode!=='wounded'){hsFall(t,ux,uz,1,{knock:true});}}
+// ---------- falling: an inverted pendulum around the feet, stopped by walls ----------
+function hsFall(t,ux,uz,k,o){const g=t.g;const s=t.hs=Object.assign(t.hs||{},{mode:'fall',th:.06,w:1.2+k*1.6,ux:ux+R(-.25,.25),uz:uz+R(-.25,.25),yaw:g.rotation.y,vx:ux*k*2.2,vz:uz*k*2.2,o:o||{},t:0,bounce:0,wall:0,seed:rnd()});
+  const l=Math.hypot(s.ux,s.uz)||1;s.ux/=l;s.uz/=l;g.rotation.x=0;g.rotation.z=0;s.gy=Math.max(hsGround(g.position.x,g.position.z),(g.position.y>.15?0:g.position.y)||0,t.y0!=null?t.y0:-99);t.down=Math.max(t.down||0,999);
+  // which way the body faces relative to the fall (back, front, side)
+  const fx=Math.sin(s.yaw),fz=Math.cos(s.yaw);s.back=(fx*s.ux+fz*s.uz)<0?0:1;HS.list.add(t);sfx('hit',.35);}
+function hsTick(dt){for(const p of peds){if(p.rig&&!(p.down>0)&&!p.hs&&p.g.visible)p.y0=p.g.position.y;}
+  for(const t of [...HS.list]){if(!t.g||!t.g.parent){HS.list.delete(t);continue;}const s=t.hs;if(!s){HS.list.delete(t);continue;}const g=t.g;s.t+=dt;
+    if(t.headless||t.crawl||(typeof FLY!=='undefined'&&FLY.some(f=>f.p===t))){hsEnd(t);continue;}
+    if(s.mode==='ok'||s.mode==='wounded'){// balance springs back; a few stepping-back steps
+      if(s.sv>0){const sp=s.sv;const q={x:g.position.x+s.ux*sp*dt,z:g.position.z+s.uz*sp*dt};hsPush(q,g);if(!(t.down>0)||s.mode==='wounded'){g.position.x=q.x;g.position.z=q.z;}s.sv=Math.max(0,s.sv-dt*7);}
+      s.bx=(s.bx||0)*Math.max(0,1-dt*3.2);s.bz=(s.bz||0)*Math.max(0,1-dt*3.2);s.st=Math.max(0,(s.st||0)-dt);
+      if(s.mode==='wounded'){s.t+=0;t.hp-=dt*(s.bleed||1.5);s.drip-=dt;if(s.drip<=0&&brutalOn()){s.drip=R(.25,.5);hsDrip(t);}
+        if(t.hp<=0){t.hp=0;if(peds.includes(t)){t.dead=true;}hsFall(t,Math.sin(g.rotation.y),Math.cos(g.rotation.y),.35,{gun:true,dead:true,bleedOut:true});continue;}}
+      if(s.mode==='ok'&&Math.hypot(s.bx,s.bz)<.02&&s.sv<=0&&s.st<=0)hsEnd(t);continue;}
+    if(!(t.down>0)&&s.mode!=='brawl'&&s.mode!=='cower'&&s.mode!=='watch'){hsEnd(t);continue;}
+    if(s.mode==='brawl'||s.mode==='cower'||s.mode==='watch')continue;
+    const yawQ=HS_Y.setFromAxisAngle(HS_UP,s.yaw);
+    if(s.mode==='fall'){// toppling; slide a little; walls stop the fall
+      s.w+=9.5*Math.sin(Math.max(.05,s.th))*dt;s.th+=s.w*dt;const q={x:g.position.x+s.vx*dt,z:g.position.z+s.vz*dt};hsPush(q,g);g.position.x=q.x;g.position.z=q.z;s.vx*=Math.max(0,1-dt*3);s.vz*=Math.max(0,1-dt*3);
+      const L=1.15*Math.sin(s.th),hy=1.15*Math.cos(s.th)+.2;if(!s.wall&&s.th<1.1&&solidAt(g.position.x+s.ux*(L+.35),Math.max(hy,1.7)+(s.gy||0),g.position.z+s.uz*(L+.35))){s.wall=1;s.mode='slump';s.t=0;s.th0=s.th;sfx('hit',.3);}
+      else if(s.th>=Math.PI/2-.02){s.th=Math.PI/2-.02;if(s.bounce<1&&s.w>2.2){s.w=-s.w*.18;s.bounce++;shakeAt(g.position,.08);}else{s.mode='lie';s.t=0;s.w=0;hsLand(t);}}}
+    else if(s.mode==='slump'){// sliding down the wall into a sitting heap
+      const u=Math.min(1,s.t/.9);s.th=s.th0*(1-u)+.28*u;s.sit=u;if(u>=1){s.mode=s.o.dead||t.dead?'deadsit':'sitdaze';s.t=0;s.dur=R(2,4);if(brutalOn()&&s.mode==='deadsit')makePool(g.position.x,g.position.z,R(.5,.9));}}
+    else if(s.mode==='sitdaze'){if(s.t>s.dur){s.mode='situp';s.t=0;}}
+    else if(s.mode==='situp'){const u=Math.min(1,s.t/1.1);s.th=.28*(1-u);s.sit=1-u;if(u>=1){hsEnd(t,true);continue;}}
+    else if(s.mode==='lie'){// on the ground: knocked out, writhing or still
+      if(s.next==='getup'&&s.t>s.dur){s.mode='getup';s.t=0;}
+      else if(s.next==='writhe'){s.mode='writhe';s.t=0;s.dur=R(6,11);}
+      else if(s.next==='dead'){s.mode='dead';s.t=0;}}
+    else if(s.mode==='writhe'){s.drip=(s.drip||0)-dt;if(s.drip<=0&&brutalOn()){s.drip=R(.6,1.2);const p=g.position;makePool(p.x+s.ux*.5,p.z+s.uz*.5,R(.3,.6));}
+      if(s.t>2&&rnd()<dt*.25&&peds.includes(t))subtitle('途人',pick(['救……救命……','好痛……','叫白車呀……','我唔想死……']));
+      if(s.t>s.dur){s.mode='dead';s.t=0;}}
+    else if(s.mode==='getup'){const u=Math.min(1,s.t/1.5);s.th=(Math.PI/2-.02)*(1-u*u*(3-2*u));if(u>=1){hsEnd(t,true);continue;}}
+    else if(s.mode==='dead'||s.mode==='deadsit'){if(t.down>0&&t.down<998){}// the original timer takes over
+      if(t.down>60)t.down=peds.includes(t)?45:40;}
+    // place the body
+    const th=s.th||0;HS_AX.set(s.uz,0,-s.ux);HS_Q.setFromAxisAngle(HS_AX,th);g.quaternion.copy(HS_Q).multiply(yawQ);
+    const gy=Math.max(hsGround(g.position.x,g.position.z),s.gy!=null?s.gy:-99);g.position.y=gy+Math.sin(th)*.17;}}
+function shakeAt(p,k){const d=Math.hypot(p.x-PLAYER.x,p.z-PLAYER.z);if(d<12)shake=Math.max(shake||0,k*(1-d/12));}
+function hsLand(t){const s=t.hs;sfx('hit',.25);try{emit(PSA,{x:t.g.position.x+s.ux*.7,y:hsGround(t.g.position.x,t.g.position.z)+.1,z:t.g.position.z+s.uz*.7,vx:0,vy:.4,vz:0,life:.7,s0:.4,s1:1.4,r:.62,g:.6,b:.56,a:.35});}catch(e){}
+  const o=s.o||{};if(o.knock||(!t.dead&&!o.dead&&!o.gun)){s.next='getup';s.dur=R(2.2,4.5);t.hp=Math.max(t.hp||0,1);}
+  else if(o.gun&&o.part!=='head'&&!o.bleedOut)s.next='writhe';else s.next='dead';
+  if(brutalOn()&&(o.gun||t.dead))makePool(t.g.position.x+s.ux*.6,t.g.position.z+s.uz*.6,R(.4,.8));}
+function hsEnd(t,stand){const s=t.hs;t.hs=null;HS.list.delete(t);const g=t.g;g.quaternion.setFromAxisAngle(HS_UP,s&&s.yaw!=null?s.yaw:g.rotation.y);g.position.y=hsGround(g.position.x,g.position.z);hsReset(t);
+  if(stand){t.down=.001;t.dead=false;t.hp=Math.max(t.hp||0,60);if(peds.includes(t)){if(rnd()<.35&&Math.hypot(g.position.x-PLAYER.x,g.position.z-PLAYER.z)<12){t.hs={mode:'brawl',t:0,cd:.8,x0:g.position.x,z0:g.position.z};HS.list.add(t);subtitle('途人',pick(['你打我？！','嚟呀！','我今日同你拼咗！']));}else t.flee=8;}}}
+function hsReset(t){const J=t.J;if(!J)return;for(const k of ['hips','spine','chest','neck','head']){J[k].rotation.z=0;if(k!=='hips'&&k!=='chest')J[k].rotation.y=0;}for(let i=0;i<2;i++)for(const a of ['sh','el','wr','hp','kn','an']){const o=J[a][i];if(o){o.rotation.y=0;o.rotation.z=0;}}t.b.position.y=0;}
+// fist fights: a few people who get back up come at you
+function hsBrawl(t,dt){const s=t.hs,g=t.g;s.t+=dt;s.cd-=dt;const dx=PLAYER.x-g.position.x,dz=PLAYER.z-g.position.z,d=Math.hypot(dx,dz);
+  if(s.t>12||d>14||S.dead||PLAYER.car||Math.hypot(g.position.x-s.x0,g.position.z-s.z0)>6){hsEnd(t);t.flee=6;return;}
+  const h=Math.atan2(dx,dz);g.rotation.y=h;if(d>1.15){const sp=3.2;const q={x:g.position.x+dx/d*sp*dt,z:g.position.z+dz/d*sp*dt};hsPush(q,g);g.position.x=q.x;g.position.z=q.z;animP(t,sp,dt);s.atk=0;}
+  else if(s.cd<=0){s.cd=R(.8,1.3);s.atk=.3;hurtPlayer(Math.round(R(4,8)));sfx('hit',.5);try{hitFx(PLAYER.x,(PLAYER.y||0)+1.4,PLAYER.z,'jab');}catch(e){}}
+  s.atk=Math.max(0,(s.atk||0)-dt);}
+{const _pu=pedUpdate;pedUpdate=function(p,dt){const s=p&&p.hs;if(s){if(s.mode==='brawl'){hsBrawl(p,dt);return;}if(s.mode==='cower'||s.mode==='watch'){s.t+=dt;if(s.t>s.dur){p.hs=null;HS.list.delete(p);hsReset(p);}else{if(s.mode==='watch'){p.g.rotation.y=Math.atan2(s.x-p.g.position.x,s.z-p.g.position.z);}return;}}
+    if(s.mode==='wounded'){// limping away at a fraction of the speed
+      return _pu(p,dt*(s.part==='legL'||s.part==='legR'?.3:.45));}}return _pu(p,dt);};}
+// ---------- bystanders ----------
+function hsFear(x,z,r,gun,victim){if(GT-(HS.fearT||-9)<.35)return;HS.fearT=GT;let n=0;for(const p of peds){if(p===victim||!p.rig||p.hs||p.down>0||!p.g.visible)continue;const d=Math.hypot(p.g.position.x-x,p.g.position.z-z);if(d>r)continue;if(++n>8)break;
+  const k=rnd();if(gun&&k<.4){p.hs={mode:'cower',t:0,dur:R(2.5,5)};HS.list.add(p);if(rnd()<.3)subtitle('途人',pick(['呀——！','有槍呀！','匿埋呀！']));}else if(k<(gun?.8:.55))p.flee=Math.max(p.flee||0,7);else{p.hs={mode:'watch',t:0,dur:R(2,4),x,z};HS.list.add(p);}}}
+{const _fw=fireWeapon;fireWeapon=function(){const a=FIRE.cd;const r=_fw.apply(this,arguments);try{if(FIRE.cd>a&&gnW().gun)hsFear(PLAYER.x,PLAYER.z,26,true,null);}catch(e){}return r;};}
+// ---------- poses on top of the joint solver ----------
+function hsSet(o,x,y,z,k){if(!o)return;o.rotation.x+=(x-o.rotation.x)*k;if(y!=null)o.rotation.y+=(y-o.rotation.y)*k;if(z!=null)o.rotation.z+=(z-o.rotation.z)*k;}
+function hsPose(p,dt){const s=p.hs,J=p.J;if(!s||!J)return;const k=Math.min(1,dt*10),t=GT+(s.seed||0)*10;const sd=(s.seed||.5)>.5?1:-1;
+  if(s.mode==='ok'||s.mode==='wounded'){const bal=Math.min(1,Math.hypot(s.bx||0,s.bz||0));if(bal>.02){// lean with the push: arms out for balance
+      const fx=Math.sin(p.g.rotation.y),fz=Math.cos(p.g.rotation.y);const fwd=(s.bx*fx+s.bz*fz),side=(s.bx*fz-s.bz*fx);J.spine.rotation.x+=-fwd*.5;J.spine.rotation.z+=side*.4;J.neck.rotation.x+=-fwd*.5;
+      for(let i=0;i<2;i++){const out=i?1:-1;J.sh[i].rotation.x+=(-.9*bal);J.sh[i].rotation.z+=out*.9*bal;J.el[i].rotation.x+=-.5*bal;}if(s.sv>0)animP(p,s.sv*1.5,dt);}
+    if(s.mode==='wounded'){const pt=s.part||'torso';const hand=pt==='armL'?0:pt==='armR'?1:(s.seed>.5?0:1);const o=1-hand;// the other hand presses on the wound
+      J.spine.rotation.x+=(.32-J.spine.rotation.x)*k;J.neck.rotation.x+=(.2-J.neck.rotation.x)*k;
+      if(pt==='legL'||pt==='legR'){hsSet(J.sh[o],-.6,null,(o?-1:1)*-.2,k);hsSet(J.el[o],-.6,null,null,k);}else{hsSet(J.sh[o],-.55,null,(o?-1:1)*-.6,k);hsSet(J.el[o],-1.9,null,null,k);}
+      if(pt==='armL'||pt==='armR'){hsSet(J.sh[hand],.1,null,0,k);hsSet(J.el[hand],-.15,null,null,k);}}return;}
+  if(s.mode==='brawl'){const a=s.atk>0?1:0;hsSet(J.chest,0,a?.5:-.3,0,k);hsSet(J.sh[1],a?-1.5:-.9,null,a?.5:.15,k*1.5);hsSet(J.el[1],a?-.1:-1.7,null,null,k*1.5);hsSet(J.sh[0],-.6,null,.2,k);hsSet(J.el[0],-2.2,null,null,k);return;}
+  if(s.mode==='cower'){p.b.position.y+=(-.5-p.b.position.y)*k;for(let i=0;i<2;i++){hsSet(J.hp[i],-1.2,null,(i?1:-1)*.15,k);hsSet(J.kn[i],2.0,null,null,k);hsSet(J.an[i],-.6,null,null,k);hsSet(J.sh[i],-2.6+Math.sin(t*9+i)*.05,null,(i?-1:1)*.5,k);hsSet(J.el[i],-2.1,null,null,k);}J.spine.rotation.x+=(.6-J.spine.rotation.x)*k;J.neck.rotation.x+=(.5-J.neck.rotation.x)*k;return;}
+  if(s.mode==='watch'){J.neck.rotation.x+=(-.05-J.neck.rotation.x)*k;if(s.seed>.6){hsSet(J.sh[1],-.4,null,-.5,k);hsSet(J.el[1],-2.2,null,null,k);}return;}
+  const lying=s.mode==='lie'||s.mode==='writhe'||s.mode==='dead';const back=s.back;
+  if(s.mode==='fall'){const u=Math.min(1,s.th/1.5);// arms go out to break the fall, knees give way
+    for(let i=0;i<2;i++){const out=i?1:-1;if(back)hsSet(J.sh[i],-1.4-Math.sin(t*14+i)*.4,null,out*(.6+u*.6),k*2);else hsSet(J.sh[i],-1.6*u,null,out*.3,k*2);hsSet(J.el[i],-.4,null,null,k*2);hsSet(J.kn[i],.3+u*.7*(i?1:.6),null,null,k*2);hsSet(J.hp[i],-.3*u*(i?1:.4),null,out*.1,k*2);}
+    J.neck.rotation.x+=((back?.5:-.4)-J.neck.rotation.x)*k;return;}
+  if(s.mode==='slump'||s.mode==='deadsit'||s.mode==='sitdaze'||s.mode==='situp'){const u=s.mode==='slump'?Math.min(1,s.t/.9):s.mode==='situp'?(s.sit||0):1;p.b.position.y+=(-.72*u-p.b.position.y)*k;for(let i=0;i<2;i++){hsSet(J.hp[i],-1.45*u,null,(i?1:-1)*.18,k);hsSet(J.kn[i],.3+(i?.9:.1)*u,null,null,k);hsSet(J.sh[i],-.2,null,(i?1:-1)*.25,k);hsSet(J.el[i],-.5,null,null,k);}J.neck.rotation.x+=(.6*u-J.neck.rotation.x)*k;J.neck.rotation.z+=(sd*.4*u-J.neck.rotation.z)*k;return;}
+  if(lying){p.b.position.y+=(0-p.b.position.y)*k;const still=s.mode==='dead';const w=s.mode==='writhe'?1:0;// limbs spread by the fall, then slack (or curling and kicking while hurt)
+    for(let i=0;i<2;i++){const out=i?1:-1;const ph=t*(1.6+i*.4);
+      const ax=back?(-.2-(i===0?.9:.2)*(s.seed)):(-2.6+(i?.3:0));hsSet(J.sh[i],w?(-.7+Math.sin(ph)*.25)*(i===s.hand?1.4:1):ax,null,w&&i===s.hand?out*-.7:out*(.9+s.seed*.5),k*.6);hsSet(J.el[i],w&&i===s.hand?-1.9:-.35-s.seed*.4,null,null,k*.6);
+      const kneeUp=w?Math.max(0,Math.sin(ph*.7+i*2))*1.1:(i?.25+s.seed*.6:.05);hsSet(J.hp[i],-kneeUp*.7,null,out*(.08+s.seed*.08),k*.6);hsSet(J.kn[i],kneeUp*1.3+.05,null,null,k*.6);}
+    J.neck.rotation.z+=((still?sd*.5:Math.sin(t*.9)*.3)-J.neck.rotation.z)*k*.5;J.neck.rotation.x+=((w?(back?-.35:.2)+Math.sin(t*1.3)*.1:0)-J.neck.rotation.x)*k*.5;
+    if(s.hand==null)s.hand=s.seed>.5?0:1;return;}
+  if(s.mode==='getup'){const u=Math.min(1,s.t/1.5);// push off the ground: hands down, knees under, rise
+    for(let i=0;i<2;i++){const out=i?1:-1;hsSet(J.sh[i],u<.5?(back?.7:-1.4):-.3,null,out*.25,k*1.5);hsSet(J.el[i],u<.5?-.2:-.6,null,null,k*1.5);hsSet(J.hp[i],u<.75?-1.4:-.4*(1-u),null,null,k*1.5);hsSet(J.kn[i],u<.75?(i?2.0:1.2):.4*(1-u),null,null,k*1.5);}
+    p.b.position.y+=((u>.4&&u<.85?-.35:0)-p.b.position.y)*k;}}
+{const _rs=rgSolve;rgSolve=function(p,dt,far){_rs(p,dt,far);if(p===PLAYER.p){hsFlinch(p,dt);return;}if(!p.hs)return;try{hsPose(p,dt);}catch(e){if(!HS.err){HS.err=String(e);console.error('hs pose',e);}}};}
+// the old flat death pose must not fight the fall
+{const _gt=grTick;grTick=function(dt){const keep=[];for(const p of HS.list){if(p.dead&&p.hs&&p.hs.mode!=='ok'){keep.push(p);p._hsDead=p.dead;p.dead=false;}}try{return _gt(dt);}finally{for(const p of keep)p.dead=p._hsDead;}};}
+// ---------- the player flinches ----------
+{const _hp=hurtPlayer;hurtPlayer=function(n){const r=_hp(n);try{if(n>0&&!PLAYER.car)HS.pf={t:.32,k:Math.min(1,n/25),s:rnd()<.5?-1:1};}catch(e){}return r;};}
+function hsFlinch(p,dt){const f=HS.pf;if(!f)return;f.t-=dt;if(f.t<=0){HS.pf=null;return;}const u=Math.sin(Math.min(1,f.t/.32)*Math.PI)*f.k;const J=p.J;J.spine.rotation.x-=u*.35;J.neck.rotation.x-=u*.5;J.chest.rotation.y+=u*.4*f.s;for(let i=0;i<2;i++){J.sh[i].rotation.x-=u*.6;J.el[i].rotation.x-=u*.5;}}
+// ---------- blood: darker, finer, mostly 18+; outside 18+ a hit shows a puff of dust ----------
+const HS_DROP={geo:null,mats:null,splat:null,splatM:null};
+function hsDropMats(){if(HS_DROP.geo)return;HS_DROP.geo=new THREE.BoxGeometry(.016,.016,.05);HS_DROP.mats=['#4a0303','#5e0505','#720808','#3a0202'].map(c=>new THREE.MeshBasicMaterial({color:lin(c)}));HS_DROP.splat=new THREE.CircleGeometry(1,10);HS_DROP.splatM=new THREE.MeshBasicMaterial({color:lin('#3e0303'),transparent:true,opacity:.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});}
+blood=function(x,y,z,n){if(!brutalOn()){try{for(let i=0;i<3;i++)emit(PSA,{x,y,z,vx:R(-.6,.6),vy:R(.2,.8),vz:R(-.6,.6),life:R(.3,.5),s0:.12,s1:.35,r:.78,g:.76,b:.72,a:.5});}catch(e){}return;}
+  hsDropMats();const m=Math.min(22,Math.round(n*.45)+2);const lite=typeof LITE!=='undefined'&&LITE.on;const cap=lite?60:160;
+  for(let i=0;i<m;i++){if(HS.drops.length>=cap){const o=HS.drops.shift();scene.remove(o.m);}const d=new THREE.Mesh(HS_DROP.geo,pick(HS_DROP.mats));d.position.set(x,y,z);const sp=R(.6,1)*(n>30?3.2:2.2);
+    const a=R(0,TAU);d.scale.setScalar(R(.6,1.4));scene.add(d);HS.drops.push({m:d,vx:Math.cos(a)*sp*R(.3,1),vy:R(.3,2.2),vz:Math.sin(a)*sp*R(.3,1),t:1.4});}};
+function hsDrip(t){const J=t.J;const src=t.hs&&t.hs.part&&t.hs.part.startsWith('leg')?J.kn[t.hs.part==='legL'?0:1]:J.chest;const p=src.getWorldPosition(new V3());hsDropMats();const d=new THREE.Mesh(HS_DROP.geo,HS_DROP.mats[0]);d.position.set(p.x+R(-.08,.08),p.y-.1,p.z+R(-.08,.08));scene.add(d);HS.drops.push({m:d,vx:0,vy:-.2,vz:0,t:1.2,small:1});}
+function hsDropsTick(dt){const tmp=new V3();for(let i=HS.drops.length-1;i>=0;i--){const o=HS.drops[i],m=o.m;o.t-=dt;o.vy-=9.8*dt;m.position.x+=o.vx*dt;m.position.y+=o.vy*dt;m.position.z+=o.vz*dt;tmp.set(m.position.x+o.vx,m.position.y+o.vy,m.position.z+o.vz);m.lookAt(tmp);
+    const gy=hsGround(m.position.x,m.position.z);if(m.position.y<=gy+.01||o.t<=0){scene.remove(m);HS.drops.splice(i,1);if(m.position.y<=gy+.05)hsSplat(m.position.x,gy,m.position.z,o.small?R(.02,.04):R(.03,.08));}}}
+function hsSplat(x,y,z,r){hsDropMats();const lite=typeof LITE!=='undefined'&&LITE.on;if(HS.splats.length>=(lite?40:140)){const o=HS.splats.shift();scene.remove(o);}const m=new THREE.Mesh(HS_DROP.splat,HS_DROP.splatM);m.rotation.x=-Math.PI/2;m.position.set(x,y+.025+HS.splats.length*.00002,z);m.scale.set(r*R(.8,1.6),r,1);m.rotation.z=R(0,TAU);scene.add(m);HS.splats.push(m);}
+// wounds stay on the clothes where the bullet went in
+const HS_WOUND={geo:null,mat:null};
+function hsWound(t,part,ux,uz){if(!t.J)return;if(!HS_WOUND.geo){HS_WOUND.geo=new THREE.CircleGeometry(.05,10);const [c,g]=cvs(64,64);const gr=g.createRadialGradient(32,32,2,32,32,31);gr.addColorStop(0,'rgba(20,0,0,1)');gr.addColorStop(.3,'rgba(80,4,4,.95)');gr.addColorStop(.75,'rgba(110,8,8,.6)');gr.addColorStop(1,'rgba(110,8,8,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);HS_WOUND.mat=new THREE.MeshBasicMaterial({map:ctex(c),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});}
+  t.wounds=t.wounds||[];if(t.wounds.length>=5){const o=t.wounds.shift();if(o.parent)o.parent.remove(o);}const J=t.J;const fx=Math.sin(t.g.rotation.y),fz=Math.cos(t.g.rotation.y);const front=(fx*-ux+fz*-uz)>0;
+  let bone=J.chest,pos=[R(-.1,.1),R(.05,.3),front?.17:-.17];if(part==='head'){bone=J.head;pos=[R(-.05,.05),R(.08,.18),front?.2:-.2];}else if(part==='armL'||part==='armR'){bone=J.sh[part==='armL'?0:1];pos=[0,-.15,front?.06:-.06];}else if(part==='legL'||part==='legR'){bone=J.hp[part==='legL'?0:1];pos=[0,-.2,front?.09:-.09];}
+  const m=new THREE.Mesh(HS_WOUND.geo,HS_WOUND.mat);m.position.set(...pos);if(!front)m.rotation.y=Math.PI;m.scale.setScalar(R(.8,1.3));bone.add(m);t.wounds.push(m);
+  try{if(typeof bloodMist==='function'){const p=bone.localToWorld(new V3(...pos));bloodMist(p.x,p.y,p.z,.7);bloodMist(p.x+ux*.5,p.y,p.z+uz*.5,.5);}}catch(e){}}
+// the mist is a short, fine puff rather than a red balloon
+{const _bm=bloodMist;bloodMist=function(x,y,z,k){return _bm(x,y,z,(k||1)*.5);};}
+function hsClearWounds(t){for(const m of (t.wounds||[]))if(m.parent)m.parent.remove(m);t.wounds=[];}
+// people that stand back up clean themselves (the reset in pedUpdate / the cop loop)
+{const _pu2=pedUpdate;pedUpdate=function(p,dt){const was=p&&p.down>0;const r=_pu2(p,dt);if(was&&p&&!(p.down>0)&&!p.hs)hsClearWounds(p);return r;};}
+// ---------- fewer people on the street ----------
+{const _sp=spawnPeds;spawnPeds=function(n,cx,cz){return _sp(Math.max(6,Math.round(n*.62)),cx,cz);};}
+// ---------- frame ----------
+{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on)return r;try{hsTick(dt);hsDropsTick(dt);}catch(e){if(!HS.err){HS.err=String(e);console.error('hs',e);}}return r;};}
+function v10dBoot(){}
 
 
 
