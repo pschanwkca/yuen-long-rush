@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -9778,6 +9778,355 @@ function hsClearWounds(t){for(const m of (t.wounds||[]))if(m.parent)m.parent.rem
 // ---------- frame ----------
 {const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on)return r;try{hsTick(dt);hsDropsTick(dt);}catch(e){if(!HS.err){HS.err=String(e);console.error('hs',e);}}return r;};}
 function v10dBoot(){}
+
+// ===== v22.0 拆樓: every street building can be broken, the AFTER ZERO way. A building stands as part of the city batch until a
+// real hit lands; then its lower floors become a frame of columns, wall panels and floor slabs with a support graph, and the
+// floors above ride on top as one block. Weapon power against material armour decides what breaks; lost support makes pieces
+// fall; losing the ground-floor columns brings the whole thing down into a dust cloud and a climbable heap of rubble.
+// A day of game time later it is back: hoarding first, then workers and a digger clear the heap, bamboo scaffolding and green
+// net go up, the building grows floor by floor, and the street gets its shops back. Our own small rigid-body solver drives
+// the falling pieces and the debris (no physics library is needed). =====
+const DB={cur:null,tgt:null,bat:new Set(),act:new Set(),bodies:[],sites:new Map(),tot:0,lastMin:null,err:null,stats:{broken:0,down:0},prot:null,saveT:0,dirty:false,
+  mob:false,nmod:6,cap:220,bodyCap:28,chunk:null,cs:[],ci:0,inFire:false,wallHits:[],carCtx:null,carHits:[],key:o=>Math.round((o.x0+o.x1)/2)+','+Math.round((o.z0+o.z1)/2)};
+const DBA={panel:{hp:90,armor:10},column:{hp:220,armor:32},slab:{hp:200,armor:30},block:{hp:1e9,armor:1e9}};
+const DB_DAY=1440,FLOOR=3.3,SLAB=.3,COL=.7,PT=.3;
+function dbErr(e,w){if(!DB.err){DB.err=w+': '+String(e&&e.stack||e).slice(0,300);console.error('db '+w,e);}}
+/* ---------------------------------------------------------------- 1. remember which triangles belong to which building */
+function dbRec(B,v0){const T=DB.tgt;if(!T)return;const v1=B.v;if(v1<=v0)return;const shopish=T.pts&&(B===shopB||B===signB);const key=shopish?'drs':'dr';T[key]=T[key]||[];const L=T[key];const last=L[L.length-1];if(last&&last[0]===B&&last[2]===v0)last[2]=v1;else L.push([B,v0,v1]);B.dbHas=true;DB.bat.add(B);}
+for(const k of ['quad','hquad','geo']){const _f=Batch.prototype[k];Batch.prototype[k]=function(){const v0=this.v;const r=_f.apply(this,arguments);if(DB.tgt)dbRec(this,v0);return r;};}
+{const _pf=polyFill;polyFill=function(B,pts){const v0=B.v;const r=_pf.apply(this,arguments);if(DB.tgt&&DB.cur&&pts===DB.cur.pts)dbRec(B,v0);return r;};}
+{const _mf=matFor;matFor=function(o){const m=_mf(o);DB.cur=o;DB.tgt=o;o.dbMat=m;return m;};}
+{const _cg=computeGate;computeGate=function(){DB.cur=null;DB.tgt=null;return _cg.apply(this,arguments);};}
+{const _bb=buildBuildings;buildBuildings=function(){try{return _bb.apply(this,arguments);}finally{DB.cur=null;DB.tgt=null;}};}
+SHOPF.push=function(...a){for(const f of a)if(DB.cur&&!f.bo)f.bo=DB.cur;return Array.prototype.push.apply(this,a);};
+{const _ds=drawShopFace;drawShopFace=function(f){const c=DB.cur,t=DB.tgt;DB.tgt=f.bo?f:null;DB.cur=null;try{return _ds.apply(this,arguments);}finally{DB.cur=c;DB.tgt=t;if(f.bo)(f.bo.shops=f.bo.shops||[]).push(f);}};}
+{const _wk=wenKeeFront;wenKeeFront=function(f){if(f&&f.bo)f.bo.dbProt=true;return _wk.apply(this,arguments);};}
+{const _put=put;put=function(k,...a){if(DB.tgt&&INST[k]){(DB.tgt.inst=DB.tgt.inst||[]).push([k,INST[k].list.length]);}return _put(k,...a);};}
+{const _fi=flushInst;flushInst=function(){const r=_fi.apply(this,arguments);try{scene.traverse(o=>{if(!o.isInstancedMesh)return;for(const k in INST)if(INST[k].geo===o.geometry&&!INST[k].dbMesh)INST[k].dbMesh=o;});}catch(e){}return r;};}
+{const _bm=Batch.prototype.mesh;Batch.prototype.mesh=function(mat,cast){const me=_bm.apply(this,arguments);if(me&&this.dbHas){this.me=me;me.geometry.attributes.position.__dbKeep=true;}return me;};}
+{const _md=memDropAttr;memDropAttr=function(a){if(a&&a.__dbKeep)return;return _md(a);};}
+// hide / show a run of vertices inside a batch (they collapse onto one point), uploading only that run
+function dbRange(B,v0,v1,show,store){const me=B.me;if(!me)return;const a=me.geometry.attributes.position;const A=a.array;if(!A)return;const o=v0*3,e=v1*3;
+  if(!show){if(store&&!store.has(B.me))store.set(B.me,[]);if(store)store.get(B.me).push([o,A.slice(o,e)]);const x=A[o],y=A[o+1],z=A[o+2];for(let k=o;k<e;k+=3){A[k]=x;A[k+1]=y;A[k+2]=z;}}
+  dbDirty.add(a);(a._dbLo===undefined||o<a._dbLo)&&(a._dbLo=o);(a._dbHi===undefined||e>a._dbHi)&&(a._dbHi=e);}
+const dbDirty=new Set();
+function dbFlush(){for(const a of dbDirty){a.updateRange.offset=a._dbLo;a.updateRange.count=a._dbHi-a._dbLo;a.needsUpdate=true;a._dbLo=undefined;a._dbHi=undefined;}dbDirty.clear();}
+function dbHideOrig(o,hide,all){if(hide){if(!o.dbHidden){o.dbHidden=new Map();for(const [B,v0,v1] of o.dr||[])dbRange(B,v0,v1,false,o.dbHidden);}if(all){if(!o.dbHiddenS){o.dbHiddenS=new Map();for(const [B,v0,v1] of o.drs||[])dbRange(B,v0,v1,false,o.dbHiddenS);}for(const f of o.shops||[])dbShop(f,false);dbInst(o,false);dbFixtures(o,true);}return;}
+  else{if(o.dbHiddenS){dbRestoreMap(o.dbHiddenS);o.dbHiddenS=null;}if(!o.dbHidden)return;for(const [me,L] of o.dbHidden){const a=me.geometry.attributes.position;for(const [off,data] of L){a.array.set(data,off);(a._dbLo===undefined||off<a._dbLo)&&(a._dbLo=off);(a._dbHi===undefined||off+data.length>a._dbHi)&&(a._dbHi=off+data.length);dbDirty.add(a);}}o.dbHidden=null;for(const f of o.shops||[])dbShop(f,true);dbInst(o,true);dbFixtures(o,false);}}
+function dbRestoreMap(M){for(const [me,L] of M){const a=me.geometry.attributes.position;for(const [off,data] of L){a.array.set(data,off);(a._dbLo===undefined||off<a._dbLo)&&(a._dbLo=off);(a._dbHi===undefined||off+data.length>a._dbHi)&&(a._dbHi=off+data.length);dbDirty.add(a);}}}
+function dbShop(f,show){if(!show){if(f.dbHidden)return;f.dbHidden=new Map();for(const [B,v0,v1] of f.dr||[])dbRange(B,v0,v1,false,f.dbHidden);dbInst(f,false);}else{if(!f.dbHidden)return;for(const [me,L] of f.dbHidden){const a=me.geometry.attributes.position;for(const [off,data] of L){a.array.set(data,off);(a._dbLo===undefined||off<a._dbLo)&&(a._dbLo=off);(a._dbHi===undefined||off+data.length>a._dbHi)&&(a._dbHi=off+data.length);dbDirty.add(a);}}f.dbHidden=null;dbInst(f,true);}}
+const _dbM4=new THREE.Matrix4();
+function dbInst(T,show){for(const [k,i] of T.inst||[]){const m=INST[k]&&INST[k].dbMesh;if(!m||i>=m.count)continue;if(!show){T.instM=T.instM||{};if(!T.instM[k+i]){m.getMatrixAt(i,_dbM4);T.instM[k+i]=_dbM4.clone();}_dbM4.makeScale(0,0,0);m.setMatrixAt(i,_dbM4);}else if(T.instM&&T.instM[k+i]){m.setMatrixAt(i,T.instM[k+i]);}m.instanceMatrix.needsUpdate=true;}}
+// neon signs and fittings added by later code (not in the batches) that hang on this building: hidden with it
+function dbFixtures(o,hide){if(hide){if(o.dbFix)return;o.dbFix=[];const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2,R0=Math.hypot(o.x1-o.x0,o.z1-o.z0)/2+2;const top=(o.base||0)+o.h+4;const v=new V3();
+    for(const m of scene.children){if(!DB.static||!DB.static.has(m)||!(m.isMesh||m.isSprite||m.isGroup)||!m.visible||m.isInstancedMesh||m.userData.db)continue;if(m.geometry&&m.geometry.attributes&&m.geometry.attributes.position&&m.geometry.attributes.position.count>3000)continue;
+      m.getWorldPosition(v);if(Math.hypot(v.x-cx,v.z-cz)>R0||v.y<(o.base||0)+1||v.y>top)continue;if(!dbNearPoly(o.pts,v.x,v.z,1.6))continue;m.visible=false;o.dbFix.push(m);}}
+  else{for(const m of o.dbFix||[])m.visible=true;o.dbFix=null;}}
+function dbEdgeD(p,x,z){let m=1e9;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[j],c=p[i];const ex=c[0]-a[0],ez=c[1]-a[1];const l2=ex*ex+ez*ez||1e-9;const t=clamp(((x-a[0])*ex+(z-a[1])*ez)/l2,0,1);m=Math.min(m,Math.hypot(x-a[0]-ex*t,z-a[1]-ez*t));}return m;}
+function dbNearPoly(p,x,z,m){if(inPoly(x,z,p))return true;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[j],c=p[i];const ex=c[0]-a[0],ez=c[1]-a[1];const l2=ex*ex+ez*ez||1e-9;const t=clamp(((x-a[0])*ex+(z-a[1])*ez)/l2,0,1);if(Math.hypot(x-a[0]-ex*t,z-a[1]-ez*t)<m)return true;}return false;}
+/* ---------------------------------------------------------------- 2. which buildings are off limits (story and shop places) */
+function dbProtected(o){if(o.dbProt!=null)return o.dbProt;let p=false;try{if(o.t===4||o.flag||o.nomap)p=true;if(typeof POL!=='undefined'&&POL.b===o)p=true;if(typeof ylpBuilding==='function'&&ylpBuilding()===o)p=true;
+  if(typeof HOMEP!=='undefined'&&inPoly((HOMEP.x0+HOMEP.x1)/2,(HOMEP.z0+HOMEP.z1)/2,o.pts))p=true;
+  if(!p&&DB.prot)for(const q of DB.prot){if(dbNearPoly(o.pts,q.x,q.z,3)){p=true;break;}}}catch(e){}return o.dbProt=p;}
+// fixed doors and counters (an interaction that stays put) mark their building as a story / shop place
+function dbProtScan(){DB.prot=[];try{const P0={x:PLAYER.x,z:PLAYER.z};for(const it of INTER){let a=null;try{a=it.at&&it.at();}catch(e){}if(!a||a.x==null)continue;if(Math.abs(a.x-P0.x)<.01&&Math.abs(a.z-P0.z)<.01)continue;DB.prot.push({x:a.x,z:a.z});}}catch(e){}}
+/* ---------------------------------------------------------------- 3. mesh building helpers (non-indexed, so a piece can be hidden by its vertex run) */
+class DQ{constructor(){this.p=[];this.n=[];this.u=[];}get v(){return this.p.length/3;}
+  quad(a,b,c,d,n,ua,ub,uc,ud){const cr=(b.y-a.y)*(c.z-a.z)-(b.z-a.z)*(c.y-a.y),cr2=(b.z-a.z)*(c.x-a.x)-(b.x-a.x)*(c.z-a.z),cr3=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(cr*n.x+cr2*n.y+cr3*n.z<0){const t=b;b=d;d=t;const tu=ub;ub=ud;ud=tu;}this.p.push(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z,a.x,a.y,a.z,c.x,c.y,c.z,d.x,d.y,d.z);for(let i=0;i<6;i++)this.n.push(n.x,n.y,n.z);this.u.push(ua[0],ua[1],ub[0],ub[1],uc[0],uc[1],ua[0],ua[1],uc[0],uc[1],ud[0],ud[1]);}
+  tri(a,b,c,n,ua,ub,uc){const cr=(b.y-a.y)*(c.z-a.z)-(b.z-a.z)*(c.y-a.y),cr2=(b.z-a.z)*(c.x-a.x)-(b.x-a.x)*(c.z-a.z),cr3=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(cr*n.x+cr2*n.y+cr3*n.z<0){const t=b;b=c;c=t;const tu=ub;ub=uc;uc=tu;}this.p.push(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z);for(let i=0;i<3;i++)this.n.push(n.x,n.y,n.z);this.u.push(ua[0],ua[1],ub[0],ub[1],uc[0],uc[1]);}
+  mesh(mat,cast=true){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(this.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(this.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(this.u,2));g.computeBoundingSphere();
+    const m=new THREE.Mesh(g,mat);m.castShadow=cast;m.receiveShadow=true;m.userData.db=1;scene.add(m);this.me=m;return m;}}
+function dbHideRun(Q,v0,v1){const me=Q.me;if(!me)return;const a=me.geometry.attributes.position,A=a.array;for(let k=v0*3;k<v1*3;k++)A[k]=0;(a._dbLo===undefined||v0*3<a._dbLo)&&(a._dbLo=v0*3);(a._dbHi===undefined||v1*3>a._dbHi)&&(a._dbHi=v1*3);dbDirty.add(a);}
+const _v1=new V3(),_v2=new V3(),_v3=new V3(),_v4=new V3(),_vn=new V3();
+// an oriented box: centre c, unit axes X (along), Y (up), Z (inward), half sizes; faceFn picks the buffer and uv for each face
+function dbBox(c,X,Z,hx,hy,hz,faceFn){const Y=_vn.set(0,1,0).clone();const ax=[[X,hx],[Y,hy],[Z,hz]];
+  for(let f=0;f<3;f++)for(const s of [1,-1]){const [N,hn]=ax[f],[A,ha]=ax[(f+1)%3],[Bv,hb]=ax[(f+2)%3];const n=N.clone().multiplyScalar(s);const cc=c.clone().addScaledVector(N,s*hn);
+    const p=(i,j)=>cc.clone().addScaledVector(A,i*ha*s).addScaledVector(Bv,j*hb);const q=[p(-1,-1),p(1,-1),p(1,1),p(-1,1)];const r=faceFn(f*2+(s>0?0:1),n,q);if(!r)continue;const [Q,uvf]=r;Q.quad(q[0],q[1],q[2],q[3],n,uvf(q[0]),uvf(q[1]),uvf(q[2]),uvf(q[3]));}}
+// polygon ∩ axis-aligned rectangle (Sutherland–Hodgman)
+function dbClip(poly,x0,z0,x1,z1){let P=poly.map(p=>[p[0],p[1]]);const edges=[[0,x0,1],[0,x1,-1],[1,z0,1],[1,z1,-1]];
+  for(const [ax,v,s] of edges){const out=[];for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length];const ia=(a[ax]-v)*s>=0,ib=(b[ax]-v)*s>=0;if(ia)out.push(a);if(ia!==ib){const t=(v-a[ax])/(b[ax]-a[ax]);out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}}P=out;if(!P.length)break;}return P;}
+function dbArea(p){let a=0;for(let i=0;i<p.length;i++){const q=p[i],r=p[(i+1)%p.length];a+=q[0]*r[1]-r[0]*q[1];}return a/2;}
+/* ---------------------------------------------------------------- 4. the frame */
+const DBM={};
+function dbMats(){if(DBM.con)return;DBM.con=new THREE.MeshStandardMaterial({color:lin('#8d8a84'),roughness:.92});DBM.inner=new THREE.MeshStandardMaterial({color:lin('#5c5a56'),roughness:.95});DBM.fresh=new THREE.MeshStandardMaterial({color:lin('#c4bdb0'),roughness:.95});
+  DBM.floor=new THREE.MeshStandardMaterial({color:lin('#9a958c'),roughness:.9});DBM.box=new THREE.BoxGeometry(1,1,1);}
+function dbBL(pts,y0,top,owner){let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;for(const p of pts){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);}
+  const b={h:top,top,base:y0,y0:y0>.05?y0:null,t:9,flag:0,pts,area:dbArea(pts),x0,z0,x1,z1,nomap:true,dbP:owner,noStand:false};const idx=BL.length;BL.push(b);gridAdd(GRID,b,idx);return b;}
+function dbActivate(o){if(o.dbA)return o.dbA;dbMats();const t0=performance.now();const mat=o.dbMat||DBM.con;const tw=(mat.userData&&mat.userData.tw)||12,th=(mat.userData&&mat.userData.th)||12;const base=o.base||0,H=o.h;
+  const nF=Math.max(1,Math.round(H/FLOOR)),fh=H/nF;const pts=o.pts;const ccw=o.area>0?1:-1;const area=Math.abs(o.area);const BAY=Math.max(4.5,Math.sqrt(area/36));
+  let per=0;{let L=0;for(let i=0;i<pts.length;i++){const a=pts[i],c=pts[(i+1)%pts.length];L+=Math.hypot(c[0]-a[0],c[1]-a[1]);}per=L/BAY*2.2+area/(BAY*BAY)*2;}
+  const nMod=Math.max(1,Math.min(nF,DB.nmod,Math.floor((DB.mob?170:420)/Math.max(8,per))));
+  const A={o,pieces:[],nF,fh,nMod,base,H,BAY,fac:new DQ(),con:new DQ(),slab:new DQ(),blk:null,down:false,t:0,ground0:null,sides:null,stress:R(.6,1)};o.dbA=A;
+  const P=(kind,f,Q,bl,ctr,size,axes,extra)=>{const p=Object.assign({kind,f,Q,alive:true,dyn:false,hp:DBA[kind].hp,armor:DBA[kind].armor,sup:[],dep:[],c:ctr,s:size,ax:axes,A},extra||{});p.bl=bl;bl.dbP=p;A.pieces.push(p);return p;};
+  // edge columns and panels
+  const edges=[];let run=0;for(let i=0;i<pts.length;i++){const a=pts[i],c=pts[(i+1)%pts.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3){continue;}
+    const X=new V3(dx/L,0,dz/L);const n=new V3(dz/L*ccw,0,-dx/L*ccw);const Z=n.clone().negate();const k=Math.max(1,Math.round(L/BAY));edges.push({i,a,c,L,X,Z,n,k,run});run+=L;}
+  const facUV=(e,yb)=>p=>{const s=e.run+((p.x-e.a[0])*e.X.x+(p.z-e.a[1])*e.X.z);return [s/tw,(p.y-base)/th];};
+  const conUV=n=>p=>Math.abs(n.y)>.5?[p.x/4,p.z/4]:Math.abs(n.x)>Math.abs(n.z)?[p.z/4,p.y/4]:[p.x/4,p.y/4];
+  const levels=[];
+  for(let f=0;f<nMod;f++){const yb=base+f*fh,yt=yb+fh-SLAB;const L={cols:[],panels:[],slabs:[],ecols:[]};levels.push(L);
+    for(const e of edges){for(let j=0;j<e.k;j++){const t0=j/e.k,t1=(j+1)/e.k;const ax=e.a[0]+(e.c[0]-e.a[0])*t0,az=e.a[1]+(e.c[1]-e.a[1])*t0;
+        // column at the start of this bay, flush with the facade
+        const cc=new V3(ax+e.Z.x*COL/2+e.X.x*COL/2,(yb+yt)/2,az+e.Z.z*COL/2+e.X.z*COL/2);const Q=A.fac;const v0=Q.v;const Qc=A.con;const vc0=Qc.v;
+        dbBox(cc,e.X,e.Z,COL/2,(yt-yb)/2,COL/2,(fi,n,q)=>{if(fi===5)return [A.fac,facUV(e,yb)];return [A.con,conUV(n)];});
+        const cpts=[[cc.x-e.X.x*COL/2-e.Z.x*COL/2,cc.z-e.X.z*COL/2-e.Z.z*COL/2],[cc.x+e.X.x*COL/2-e.Z.x*COL/2,cc.z+e.X.z*COL/2-e.Z.z*COL/2],[cc.x+e.X.x*COL/2+e.Z.x*COL/2,cc.z+e.X.z*COL/2+e.Z.z*COL/2],[cc.x-e.X.x*COL/2+e.Z.x*COL/2,cc.z-e.X.z*COL/2+e.Z.z*COL/2]];
+        const col=P('column',f,null,dbBL(cpts,yb,yt,null),cc,[COL,yt-yb,COL],[e.X,e.Z],{runs:[[A.fac,v0,A.fac.v],[A.con,vc0,A.con.v]],edge:e.i,ex:ax,ez:az});L.cols.push(col);L.ecols.push(col);
+        // the wall panel across the rest of the bay
+        const pl=(t1-t0)*e.L-COL;if(pl>.25){const mid=(t0+t1)/2*e.L+COL/2;const px=e.a[0]+e.X.x*mid,pz=e.a[1]+e.X.z*mid;const pc=new V3(px+e.Z.x*PT/2,(yb+yt)/2,pz+e.Z.z*PT/2);const fv0=A.fac.v,cv0=A.con.v;
+          dbBox(pc,e.X,e.Z,pl/2,(yt-yb)/2,PT/2,(fi,n,q)=>{if(fi===5)return [A.fac,facUV(e,yb)];if(fi===4)return [A.con,conUV(n)];return [A.con,conUV(n)];});
+          const hp2=pl/2,ppts=[[pc.x-e.X.x*hp2-e.Z.x*PT/2,pc.z-e.X.z*hp2-e.Z.z*PT/2],[pc.x+e.X.x*hp2-e.Z.x*PT/2,pc.z+e.X.z*hp2-e.Z.z*PT/2],[pc.x+e.X.x*hp2+e.Z.x*PT/2,pc.z+e.X.z*hp2+e.Z.z*PT/2],[pc.x-e.X.x*hp2+e.Z.x*PT/2,pc.z-e.X.z*hp2+e.Z.z*PT/2]];
+          const pn=P('panel',f,null,dbBL(ppts,yb,yt,null),pc,[pl,yt-yb,PT],[e.X,e.Z],{runs:[[A.fac,fv0,A.fac.v],[A.con,cv0,A.con.v]],edge:e.i,ci:L.ecols.length-1});L.panels.push(pn);}}}
+    // interior columns on the bay grid
+    const gx0=Math.ceil(o.x0/BAY)*BAY,gz0=Math.ceil(o.z0/BAY)*BAY;
+    for(let x=gx0;x<o.x1;x+=BAY)for(let z=gz0;z<o.z1;z+=BAY){if(!inPoly(x,z,pts)||dbEdgeD(pts,x,z)<1.6)continue;
+      const cc=new V3(x,(yb+yt)/2,z);const v0=A.con.v;dbBox(cc,new V3(1,0,0),new V3(0,0,1),COL/2,(yt-yb)/2,COL/2,(fi,n)=>[A.con,conUV(n)]);
+      const cpts=[[x-COL/2,z-COL/2],[x+COL/2,z-COL/2],[x+COL/2,z+COL/2],[x-COL/2,z+COL/2]];L.cols.push(P('column',f,null,dbBL(cpts,yb,yt,null),cc,[COL,yt-yb,COL],[new V3(1,0,0),new V3(0,0,1)],{runs:[[A.con,v0,A.con.v]],ex:x,ez:z,inner:true}));}
+    // slab tiles: the floor plan cut on the bay grid
+    const sx0=Math.floor(o.x0/BAY)*BAY,sz0=Math.floor(o.z0/BAY)*BAY;
+    for(let x=sx0;x<o.x1;x+=BAY)for(let z=sz0;z<o.z1;z+=BAY){const cp=dbClip(pts,x-BAY/2,z-BAY/2,x+BAY/2,z+BAY/2);if(cp.length<3||Math.abs(dbArea(cp))<.6)continue;
+      const y1=yt+SLAB;const fv0=A.fac.v,sv0=A.slab.v,cv0=A.con.v;const tri=THREE.ShapeUtils.triangulateShape(cp.map(p=>new THREE.Vector2(p[0],p[1])),[]);const up=new V3(0,1,0),dn=new V3(0,-1,0);
+      for(const t of tri){const a=cp[t[0]],b=cp[t[1]],c=cp[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [p,q,r]=cr<0?[a,b,c]:[a,c,b];
+        A.slab.tri(_v1.set(p[0],y1,p[1]).clone(),_v2.set(q[0],y1,q[1]).clone(),_v3.set(r[0],y1,r[1]).clone(),up,[p[0]/4,p[1]/4],[q[0]/4,q[1]/4],[r[0]/4,r[1]/4]);
+        A.con.tri(_v1.set(p[0],yt,p[1]).clone(),_v3.set(r[0],yt,r[1]).clone(),_v2.set(q[0],yt,q[1]).clone(),dn,[0,0],[0,0],[0,0]);}
+      const cv1=A.con.v;
+      // edges that lie on the outside get the facade band
+      for(let i=0;i<cp.length;i++){const a=cp[i],b=cp[(i+1)%cp.length];const mx=(a[0]+b[0])/2,mz=(a[1]+b[1])/2;if(!dbNearPoly(pts,mx,mz,.05)||inPoly(mx+(b[1]-a[1])*.01,mz-(b[0]-a[0])*.01,pts)&&inPoly(mx-(b[1]-a[1])*.01,mz+(b[0]-a[0])*.01,pts))continue;
+        const L2=Math.hypot(b[0]-a[0],b[1]-a[1])||1;let nx=(b[1]-a[1])/L2,nz=-(b[0]-a[0])/L2;if(inPoly(mx+nx*.2,mz+nz*.2,pts)){nx=-nx;nz=-nz;}const n=new V3(nx,0,nz);
+        const q=[new V3(a[0],yt,a[1]),new V3(b[0],yt,b[1]),new V3(b[0],y1,b[1]),new V3(a[0],y1,a[1])];const s0=(a[0]+a[1])/tw,s1=(b[0]+b[1])/tw;A.fac.quad(q[0],q[1],q[2],q[3],n,[s0,(yt-base)/th],[s1,(yt-base)/th],[s1,(y1-base)/th],[s0,(y1-base)/th]);}
+      let mx0=1e9,mz0=1e9,mx1=-1e9,mz1=-1e9;for(const p of cp){mx0=Math.min(mx0,p[0]);mx1=Math.max(mx1,p[0]);mz0=Math.min(mz0,p[1]);mz1=Math.max(mz1,p[1]);}
+      L.slabs.push(P('slab',f,null,dbBL(cp,yt,y1,null),new V3((mx0+mx1)/2,(yt+y1)/2,(mz0+mz1)/2),[mx1-mx0,SLAB,mz1-mz0],[new V3(1,0,0),new V3(0,0,1)],{runs:[[A.fac,fv0,A.fac.v],[A.slab,sv0,A.slab.v],[A.con,cv0,cv1]],poly:cp}));}}
+  // the floors above as one block
+  if(nF>nMod){const yb=base+nMod*fh,yt=base+H;const B=new DQ();for(const e of edges){const q=[new V3(e.a[0],yb,e.a[1]),new V3(e.c[0],yb,e.c[1]),new V3(e.c[0],yt,e.c[1]),new V3(e.a[0],yt,e.a[1])];B.quad(q[0],q[1],q[2],q[3],e.n,[e.run/tw,(yb-base)/th],[(e.run+e.L)/tw,(yb-base)/th],[(e.run+e.L)/tw,(yt-base)/th],[e.run/tw,(yt-base)/th]);}
+    const tri=THREE.ShapeUtils.triangulateShape(pts.map(p=>new THREE.Vector2(p[0],p[1])),[]);const R2=new DQ();for(const t of tri){const a=pts[t[0]],b=pts[t[1]],c=pts[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [p,q,r]=cr<0?[a,b,c]:[a,c,b];
+      R2.tri(new V3(p[0],yt,p[1]),new V3(q[0],yt,q[1]),new V3(r[0],yt,r[1]),new V3(0,1,0),[p[0]/8,p[1]/8],[q[0]/8,q[1]/8],[r[0]/8,r[1]/8]);R2.tri(new V3(p[0],yb,p[1]),new V3(r[0],yb,r[1]),new V3(q[0],yb,q[1]),new V3(0,-1,0),[0,0],[0,0],[0,0]);}
+    const g=new THREE.Group();g.userData.db=1;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;const wm=B.mesh(mat);const rm=R2.mesh(DBM.inner);scene.remove(wm);scene.remove(rm);g.add(wm);g.add(rm);for(const m of [wm,rm])m.geometry.translate(-cx,-(yb+yt)/2,-cz);g.position.set(cx,(yb+yt)/2,cz);scene.add(g);
+    const blk=P('block',nMod,null,dbBL(pts,yb,yt,null),new V3(cx,(yb+yt)/2,cz),[o.x1-o.x0,yt-yb,o.z1-o.z0],[new V3(1,0,0),new V3(0,0,1)],{grp:g,runs:[]});A.blk=blk;}
+  A.fac.mesh(mat);A.con.mesh(DBM.con);A.slab.mesh(DBM.floor);
+  // supports: columns and panels stand on the slab below (or the ground); a slab rests on the columns at its corners
+  const inside=(p,poly,m)=>dbNearPoly(poly,p.x,p.z,m);
+  for(let f=0;f<nMod;f++){const L=levels[f],Lb=f?levels[f-1]:null;
+    for(const c of L.cols){if(!Lb){c.ground=true;continue;}for(const s of Lb.slabs)if(inside(c.c,s.poly,.4)){c.sup.push(s);s.dep.push(c);}if(!c.sup.length)c.ground=true;}
+    for(const p of L.panels){const ends=[L.ecols[p.ci],L.ecols[(p.ci+1)%L.ecols.length]].filter(Boolean);for(const c of ends){p.sup.push(c);c.dep.push(p);}p.rule='any';if(!Lb)p.ground=true;}
+    for(const s of L.slabs){for(const c of L.cols)if(inside(c.c,s.poly,COL)){s.sup.push(c);c.dep.push(s);}if(s.sup.length<2){const near=L.cols.map(c=>[Math.hypot(c.c.x-s.c.x,c.c.z-s.c.z),c]).sort((a,b)=>a[0]-b[0]).slice(0,3);for(const [,c] of near)if(!s.sup.includes(c)){s.sup.push(c);c.dep.push(s);}}s.rule='min:'+Math.min(2,s.sup.length);}}
+  if(A.blk){const top=levels[nMod-1].slabs;for(const s of top){A.blk.sup.push(s);s.dep.push(A.blk);}A.blk.rule='min:'+Math.max(1,Math.ceil(top.length*.5));}
+  A.levels=levels;A.ground0=levels[0].cols;
+  // four sides (by facing) for the overload check
+  const sd=[[],[],[],[]];for(const c of A.ground0){if(c.inner)continue;const e=edges.find(q=>q.i===c.edge);if(!e)continue;const k=Math.abs(e.n.x)>Math.abs(e.n.z)?(e.n.x>0?0:1):(e.n.z>0?2:3);sd[k].push(c);}A.sides=sd.filter(s=>s.length>=2);
+  o.dbSoft0=o.soft;o.soft=true;dbHideOrig(o,true);DB.act.add(A);dbFlush();A.ms=performance.now()-t0;
+  try{for(const sp of A.pieces)sp.bl.noStand=false;}catch(e){}
+  return A;}
+function dbSupOK(p){if(p.ground)return true;const n=p.sup.filter(s=>s.alive&&!s.dyn).length;if(p.rule==='any')return n>0;if(p.rule&&p.rule.startsWith('min:'))return n>=+p.rule.slice(4);return n>0;}
+/* ---------------------------------------------------------------- 5. damage and breaking */
+function dbPieceHide(p){for(const [Q,v0,v1] of p.runs)dbHideRun(Q,v0,v1);if(p.grp)p.grp.visible=false;if(p.bl)p.bl.soft=true;}
+function dbDamage(p,amt,pt,dir,power,src){if(!p.alive||p.dyn)return false;const eff=amt-p.armor;
+  if(eff<=0){dbChips(pt,dir,1+(amt>p.armor*.5?1:0),p);try{smokePuff(pt.x,pt.y,pt.z,false,.35);}catch(e){}if(src!=='blast'&&GT-(DB.clangT||0)>.12){DB.clangT=GT;sfx('hit',.25);}return false;}
+  p.hp-=eff;if(p.hp<=0){dbBreak(p,pt,dir,power);return true;}dbChips(pt,dir,2+(amt>60?2:0),p);try{smokePuff(pt.x,pt.y,pt.z,false,.5);}catch(e){}return false;}
+function dbBreak(p,pt,dir,power,quiet){if(!p.alive)return;p.alive=false;dbPieceHide(p);DB.stats.broken++;DB.dirty=true;const A=p.A;A.touched=true;
+  if(p.kind==='block'){dbBlockFall(p);return;}
+  dbFracture(p.c,p.s,p.ax,pt||p.c,dir||new V3(),power||3,p.kind==='column'?5:p.kind==='slab'?6:6,p.kind==='panel'&&!p.inner);
+  if(p.kind==='panel'&&p.f===0)for(const f of A.o.shops||[])if(dbFaceOnEdge(f,A.o,p.edge))dbShop(f,false);
+  if(!quiet){sfx(p.kind==='column'?'crash':'hit',p.kind==='column'?.55:.4);if(p.kind==='column'){shakeNear(p.c,.25);if(typeof addHeat==='function')addHeat(1);}}
+  dbLost(p);}
+function dbFaceOnEdge(f,o,ei){const a=o.pts[ei],c=o.pts[(ei+1)%o.pts.length];if(!a||!c)return false;const d=(q)=>Math.min(Math.hypot(q[0]-a[0],q[1]-a[1]),Math.hypot(q[0]-c[0],q[1]-c[1]));return d(f.a)<.6&&d(f.c)<.6||Math.hypot((f.a[0]+f.c[0])/2-(a[0]+c[0])/2,(f.a[1]+f.c[1])/2-(a[1]+c[1])/2)<1;}
+function shakeNear(p,k){const d=Math.hypot(p.x-PLAYER.x,p.z-PLAYER.z);if(d<40)shake=Math.max(shake||0,k*(1-d/40));}
+// losing support: everything that rested on it checks itself, and falls if it no longer stands
+function dbLost(p){const q=[...p.dep];let n=0;while(q.length){const a=q.shift();if(!a.alive||a.dyn)continue;if(!dbSupOK(a)){dbFall(a);n++;q.push(...a.dep);}}if(n>3)sfx('crash',.6);}
+function dbFall(p){if(p.kind==='block'){p.alive=false;dbPieceHide(p);dbBlockFall(p);return;}
+  p.alive=false;p.dyn=true;dbPieceHide(p);if(DB.bodies.length>=DB.bodyCap){dbFracture(p.c,p.s,p.ax,p.c,new V3(),2,3,false);dbLost(p);return;}
+  const mat=p.kind==='panel'&&!p.inner?(p.A.o.dbMat||DBM.con):p.kind==='slab'?DBM.floor:DBM.con;const m=new THREE.Mesh(DBM.box,mat);m.scale.set(p.s[0],p.s[1],p.s[2]);m.castShadow=true;m.userData.db=1;scene.add(m);
+  const q=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(p.ax[0],new V3(0,1,0),p.ax[1]));
+  const b=dbBody(m,p.c.clone(),q,[p.s[0]/2,p.s[1]/2,p.s[2]/2],p.kind==='slab'?2:1);b.piece=p;b.w.set(R(-.6,.6),R(-.2,.2),R(-.6,.6));dbLost(p);}
+/* ---------------------------------------------------------------- 6. a small rigid-body solver: boxes against the ground and the city's tops */
+const _bq=new THREE.Quaternion(),_bc=new V3(),_br=new V3(),_bt=new V3(),_bw=new V3();
+function dbBody(m,p,q,h,mass){const b={m,p,q,h,v:new V3(),w:new V3(),mass:mass*8*h[0]*h[1]*h[2],sleep:0,t:0,prevV:0,kind:'piece'};const I=(h[0]*h[0]+h[1]*h[1]+h[2]*h[2])/3;b.iI=1/Math.max(.05,I);DB.bodies.push(b);dbSync(b);return b;}
+function dbSync(b){b.m.position.copy(b.p);b.m.quaternion.copy(b.q);}
+const DB_CORN=[[1,1,1],[1,1,-1],[1,-1,1],[1,-1,-1],[-1,1,1],[-1,1,-1],[-1,-1,1],[-1,-1,-1]];
+function dbStepBody(b,dt){b.t+=dt;if(b.sleep>.6)return;b.v.y-=9.8*dt;b.p.addScaledVector(b.v,dt);const wl=b.w.length();if(wl>1e-5){_bq.setFromAxisAngle(_bw.copy(b.w).divideScalar(wl),wl*dt);b.q.premultiply(_bq);}
+  // deepest corner below the floor
+  let deep=0,ci=-1;let fy=0;for(let i=0;i<8;i++){const c=DB_CORN[i];_bc.set(c[0]*b.h[0],c[1]*b.h[1],c[2]*b.h[2]).applyQuaternion(b.q).add(b.p);const gy=groundAt(_bc.x,_bc.z,_bc.y+.2);const d=gy-_bc.y;if(d>deep){deep=d;ci=i;fy=gy;}}
+  const sp=b.v.length();
+  if(ci>=0){const c=DB_CORN[ci];_br.set(c[0]*b.h[0],c[1]*b.h[1],c[2]*b.h[2]).applyQuaternion(b.q);b.p.y+=deep;const vc=_bt.copy(b.w).cross(_br).add(b.v);const vn=vc.y;
+    if(vn<0){const impact=-vn;const rn=_bw.set(_br.z,0,-_br.x);// r × n with n = up
+      const k=1+ (rn.lengthSq())*b.iI;const j=-(1.25)*vn/k;b.v.y+=j;b.w.addScaledVector(rn,j*b.iI*.6);b.v.x*=.82;b.v.z*=.82;b.w.multiplyScalar(.92);
+      if(b.piece&&impact>4&&b.t>.1){return 'break';}}}
+  b.w.multiplyScalar(1-dt*.4);if(sp<.25&&b.w.length()<.25)b.sleep+=dt;else b.sleep=0;dbSync(b);
+  // heavy things falling on people
+  if(sp>5&&b.mass>3){const r=Math.max(b.h[0],b.h[2])+.4;const P=PLAYER;if(!P.car&&Math.hypot(P.x-b.p.x,P.z-b.p.z)<r&&b.p.y-b.h[1]<(P.y||0)+1.9&&b.p.y+b.h[1]>(P.y||0)){if(GT-(DB.hurtT||0)>.6){DB.hurtT=GT;hurtPlayer(Math.min(60,Math.round(sp*3)));}}
+    for(const q of peds){if(!q.g.visible||q.down>0)continue;const g=q.g.position;if(Math.hypot(g.x-b.p.x,g.z-b.p.z)<r&&b.p.y-b.h[1]<g.y+1.8)try{HIT.part='head';hitPerson(q,b.v.x,2,b.v.z,true);}catch(e){}}}
+  return null;}
+/* ---------------------------------------------------------------- 7. debris: one instanced pool of concrete lumps (cheap point bodies that tumble) */
+function dbChunkPool(){if(DB.chunk)return;dbMats();const n=DB.cap;const m=new THREE.InstancedMesh(DBM.box,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.95,flatShading:true}),n);m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);m.castShadow=true;m.receiveShadow=true;m.frustumCulled=false;m.userData.db=1;
+  const col=new THREE.Color();for(let i=0;i<n;i++){m.setMatrixAt(i,_dbM4.makeScale(0,0,0));col.set(rnd()<.55?'#bdb6a8':'#7f7b74').multiplyScalar(R(.85,1.1));m.setColorAt(i,col);}scene.add(m);DB.chunk=m;
+  for(let i=0;i<n;i++)DB.cs.push({on:false,p:new V3(),v:new V3(),q:new THREE.Quaternion(),w:new V3(),s:new V3(),t:0,life:0,rest:false});}
+function dbChunk(p,s,v,life){dbChunkPool();const c=DB.cs[DB.ci];DB.ci=(DB.ci+1)%DB.cs.length;c.on=true;c.p.copy(p);c.v.copy(v);c.s.copy(s);c.q.set(R(-1,1),R(-1,1),R(-1,1),R(-1,1)).normalize();c.w.set(R(-8,8),R(-8,8),R(-8,8));c.t=0;c.life=life||R(8,12);c.rest=false;}
+function dbChunksTick(dt){if(!DB.chunk)return;const m=DB.chunk;let any=false;for(let i=0;i<DB.cs.length;i++){const c=DB.cs[i];if(!c.on)continue;any=true;c.t+=dt;
+    if(!c.rest){c.v.y-=12*dt;c.p.addScaledVector(c.v,dt);const wl=c.w.length();if(wl>1e-4){_bq.setFromAxisAngle(_bw.copy(c.w).divideScalar(wl),wl*dt);c.q.premultiply(_bq);}
+      const gy=groundAt(c.p.x,c.p.z,c.p.y+.3)+c.s.y*.4;if(c.p.y<gy){c.p.y=gy;if(c.v.y<-1.6){c.v.y*=-.28;c.v.x*=.6;c.v.z*=.6;c.w.multiplyScalar(.5);}else{c.v.set(0,0,0);c.w.set(0,0,0);c.rest=true;}}}
+    const fade=c.t>c.life-1?Math.max(0,c.life-c.t):1;if(c.t>=c.life){c.on=false;m.setMatrixAt(i,_dbM4.makeScale(0,0,0));continue;}
+    _bt.copy(c.s).multiplyScalar(fade);_dbM4.compose(c.p,c.q,_bt);m.setMatrixAt(i,_dbM4);}
+  if(any||DB.chunkAny)m.instanceMatrix.needsUpdate=true;DB.chunkAny=any;}
+function dbChips(pt,dir,n,p){for(let i=0;i<n;i++){const s=R(.08,.22);dbChunk(_bc.copy(pt).addScaledVector(dir,-.25).clone(),new V3(s,s*R(.5,1),s),new V3(-dir.x*R(1.5,3.5)+R(-1.2,1.2),R(1.5,3.5),-dir.z*R(1.5,3.5)+R(-1.2,1.2)),R(3,5));}}
+// split a box into lumps that fly away from the blow
+function dbFracture(c,s,ax,pt,dir,power,maxN,dust=true){const vol=s[0]*s[1]*s[2];let n=Math.max(2,Math.min(maxN,Math.round(vol/1.2)+2));if(DB.mob)n=Math.min(n,4);
+  const X=ax[0],Z=ax[1];for(let i=0;i<n;i++){const lx=R(-.45,.45)*s[0],ly=R(-.45,.45)*s[1],lz=R(-.45,.45)*s[2];const p=c.clone().addScaledVector(X,lx).add(new V3(0,ly,0)).addScaledVector(Z,lz);
+    const away=p.clone().sub(pt);const d=away.length()||1;away.divideScalar(d);const fall=1/(1+d*.4);const k=Math.cbrt(vol/n);const sz=new V3(k*R(.6,1.2),k*R(.4,.9),k*R(.6,1.2)).clampScalar(.12,1.8);
+    dbChunk(p,sz,new V3(dir.x*power*fall*R(.5,1.1)+away.x*power*.4*fall+R(-1,1),power*.25*fall*R(.3,1)+R(0,1.4),dir.z*power*fall*R(.5,1.1)+away.z*power*.4*fall+R(-1,1)));}
+  if(dust)try{for(let i=0;i<Math.min(6,2+Math.round(vol/3));i++)smokePuff(c.x+R(-s[0],s[0])*.4,c.y+R(-s[1],s[1])*.3,c.z+R(-s[2],s[2])*.4,false,Math.min(2.2,.7+vol*.08));}catch(e){}}
+/* ---------------------------------------------------------------- 8. the block above, the overload and the collapse */
+function dbBlockFall(p){const A=p.A;if(A.blkB)return;const g=p.grp;g.visible=true;const h=[p.s[0]/2,p.s[1]/2,p.s[2]/2];const b=dbBody(g,g.position.clone(),new THREE.Quaternion(),h,.4);b.kind='block';b.piece=p;b.w.set(R(-.12,.12),0,R(-.12,.12));A.blkB=b;sfx('crash',.8);shakeNear(p.c,.5);}
+function dbShatterBlock(b){const p=b.piece,A=p.A;const g=b.m;g.visible=false;const S=[b.h[0]*2,b.h[1]*2,b.h[2]*2];const n=DB.mob?14:28;shakeNear(b.p,1);try{boomSfx(.6);}catch(e){}
+  for(let i=0;i<n;i++){const lp=new V3(R(-.45,.45)*S[0],R(-.45,.45)*Math.min(S[1],12),R(-.45,.45)*S[2]).applyQuaternion(b.q).add(b.p);lp.y=Math.max(lp.y,groundAt(lp.x,lp.z,lp.y)+1);const s=R(.8,2.2);dbChunk(lp,new V3(s*R(.8,1.3),s*R(.5,1),s*R(.8,1.3)),new V3(b.v.x*.3+R(-3,3),R(-1,3),b.v.z*.3+R(-3,3)),R(6,10));}
+  for(let i=0;i<10;i++)try{smokePuff(b.p.x+R(-.5,.5)*S[0],groundAt(b.p.x,b.p.z,b.p.y)+R(.5,4),b.p.z+R(-.5,.5)*S[2],false,3);}catch(e){}
+  A.blkDone=true;}
+function dbOverload(A,dt){if(A.down){return dbSettle(A,dt);}const G0=A.ground0;if(!G0||!G0.length)return;const ok=c=>c.alive&&!c.dyn;const f=G0.filter(ok).length/G0.length;let worst=1,ws=null;
+  for(const S of A.sides){const sf=S.filter(ok).length/S.length;if(sf<worst){worst=sf;ws=S;}}
+  if(f<=.5||worst<=.25){dbCollapse(A);return;}
+  if(f<.8||worst<.6){A.stress-=dt;if(A.stress<=0){A.stress=R(.8,1.5);const pool=(ws&&worst<.6?ws:G0).filter(ok);const c=pool[(rnd()*pool.length)|0];if(!c)return;
+    try{tone(55+R(0,20),AU.ctx.currentTime,.5,'sawtooth',.08,AU.sfx);}catch(e){}shakeNear(c.c,.22);try{smokePuff(c.c.x,c.c.y+R(-.5,1),c.c.z,false,1);}catch(e){}if(rnd()<.6)dbBreak(c,c.c,new V3(),2);}}}
+function dbCollapse(A){if(A.down)return;A.down=true;A.downT=0;DB.stats.down++;toast('🏚 樓房倒塌！');shakeNear(A.pieces[0].c,.9);try{boomSfx(.8);thudSfx(1);}catch(e){}if(typeof addHeat==='function')addHeat(6);
+  // the ground floor gives way at once; what stands above comes down as rubble (a few big pieces still fall whole)
+  let falls=0;for(const p of A.pieces){if(!p.alive||p.dyn||p.kind==='block')continue;if(p.f>0&&falls<(DB.mob?4:10)&&p.kind==='slab'){falls++;dbFall(p);continue;}p.alive=false;dbPieceHide(p);if(rnd()<(DB.mob?.25:.5))dbFracture(p.c,p.s,p.ax,p.c,new V3(),2,2,rnd()<.2);}
+  if(A.blk&&A.blk.alive){A.blk.alive=false;dbPieceHide(A.blk);dbBlockFall(A.blk);}
+  dbHideOrig(A.o,true,true);DB.dirty=true;}
+function dbSettle(A,dt){A.downT+=dt;const t=A.downT,o=A.o;if(t<3.2&&rnd()<dt*14){try{smokePuff(R(o.x0,o.x1),(o.base||0)+R(.5,3),R(o.z0,o.z1),false,2.2);}catch(e){}}
+  if(t>1.6&&!A.ruined){A.ruined=true;dbRuin(o,true);dbSiteStart(o,'down');}}
+/* ---------------------------------------------------------------- 9. ruin heap, hoarding, rebuild */
+function dbClear(A){if(!A)return;for(const Q of [A.fac,A.con,A.slab])if(Q.me){scene.remove(Q.me);Q.me.geometry.dispose();}for(const p of A.pieces){if(p.bl)p.bl.soft=true;if(p.grp){scene.remove(p.grp);}}A.o.dbA=null;DB.act.delete(A);}
+function dbRuin(o,grow){const S=DB.sites.get(o)||{};const base=o.base||0;const w=o.x1-o.x0,d=o.z1-o.z0;const Hh=clamp(o.h*.06,1.2,3.2);const n=Math.round(clamp(Math.abs(o.area)/2.6,24,DB.mob?70:140));
+  const im=new THREE.InstancedMesh(DBM.box||new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0xffffff,roughness:.95,flatShading:true}),n+8);im.castShadow=true;im.receiveShadow=true;im.userData.db=1;const col=new THREE.Color(),q=new THREE.Quaternion(),sc=new V3(),pp=new V3();const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;let k=0;
+  const prof=(x,z)=>{let m=1e9;const p=o.pts;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[j],c=p[i];const ex=c[0]-a[0],ez=c[1]-a[1];const l2=ex*ex+ez*ez||1e-9;const t=clamp(((x-a[0])*ex+(z-a[1])*ez)/l2,0,1);m=Math.min(m,Math.hypot(x-a[0]-ex*t,z-a[1]-ez*t));}return inPoly(x,z,p)?Math.min(1,m/Math.max(3,Math.min(w,d)*.35)):0;};
+  for(let tries=0;k<n&&tries<n*6;tries++){const x=R(o.x0,o.x1),z=R(o.z0,o.z1);const pf=prof(x,z);if(pf<=0)continue;const s=R(.7,2.1);sc.set(s*R(.8,1.4),s*R(.45,.9),s*R(.8,1.4));pp.set(x,base+Math.max(sc.y*.3,Hh*(.3+.7*pf)*R(.55,1)-s*.25),z);q.setFromEuler(new THREE.Euler(R(-.5,.5),R(0,6.3),R(-.5,.5)));
+    _dbM4.compose(pp,q,sc);im.setMatrixAt(k,_dbM4);col.set(rnd()<.6?'#b9b2a4':'#77736c').multiplyScalar(R(.8,1.08));im.setColorAt(k,col);k++;}
+  // a few column stubs keep the outline
+  for(let i=0;i<8&&k<n+8;i++){const j=(rnd()*o.pts.length)|0;const a=o.pts[j];sc.set(.7,R(1.4,3.6),.7);pp.set(a[0]+(cx-a[0])*.04,base+sc.y/2,a[1]+(cz-a[1])*.04);q.identity();_dbM4.compose(pp,q,sc);im.setMatrixAt(k,_dbM4);col.set('#77736c');im.setColorAt(k,col);k++;}
+  im.count=k;scene.add(im);S.heap=im;S.heapH=Hh;
+  // stepped collision so the heap can be climbed
+  S.heapBL=[];for(const [f,hh] of [[.98,.35],[.72,.68],[.45,1]]){const pts=o.pts.map(p=>[cx+(p[0]-cx)*f,cz+(p[1]-cz)*f]);S.heapBL.push(dbBL(pts,0,base+Hh*hh,null));}
+  if(grow){im.scale.y=.05;S.grow=0;}DB.sites.set(o,S);}
+function dbHoardTex(){if(DBM.hoard)return DBM.hoard;const [c,g]=cvs(512,128);g.fillStyle='#f2f0e8';g.fillRect(0,0,512,128);for(let x=-40;x<560;x+=40){g.fillStyle='#e8b400';g.beginPath();g.moveTo(x,0);g.lineTo(x+20,0);g.lineTo(x,20);g.lineTo(x-20,20);g.fill();g.fillStyle='#1a1a1a';g.beginPath();g.moveTo(x+20,0);g.lineTo(x+40,0);g.lineTo(x+20,20);g.lineTo(x,20);g.fill();}
+  g.fillStyle='#e8b400';g.fillRect(0,108,512,20);g.fillStyle='#c8102e';g.font='900 44px '+FS;g.textAlign='center';g.textBaseline='middle';g.fillText('地盤重地　閒人免進',256,58);g.fillStyle='#1a1a1a';g.font='700 18px '+FS;g.fillText('危險 請勿進入・元朗重建工程',256,94);
+  const t=ctex(c,true);DBM.hoard=new THREE.MeshStandardMaterial({map:t,roughness:.8,side:THREE.DoubleSide});return DBM.hoard;}
+function dbHoarding(o){const S=DB.sites.get(o);if(S.hoard)return;const mat=dbHoardTex();const Q=new DQ();const ccw=o.area>0?1:-1;const base=o.base||0;S.hoardBL=[];const p=o.pts;const off=1.4;let gate=-1,gl=0;
+  for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const L=Math.hypot(c[0]-a[0],c[1]-a[1]);if(L>gl){gl=L;gate=i;}}
+  for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3)continue;const nx=dz/L*ccw,nz=-dx/L*ccw;
+    const A0=[a[0]+nx*off-dx/L*off,a[1]+nz*off-dz/L*off],C0=[c[0]+nx*off+dx/L*off,c[1]+nz*off+dz/L*off];const segs=i===gate&&L>6?[[0,.42],[.58,1]]:[[0,1]];
+    for(const [t0,t1] of segs){const pa=[A0[0]+(C0[0]-A0[0])*t0,A0[1]+(C0[1]-A0[1])*t0],pc=[A0[0]+(C0[0]-A0[0])*t1,A0[1]+(C0[1]-A0[1])*t1];const ll=Math.hypot(pc[0]-pa[0],pc[1]-pa[1]);const y0=TH(pa[0],pa[1]);
+      Q.quad(new V3(pa[0],y0,pa[1]),new V3(pc[0],y0,pc[1]),new V3(pc[0],y0+2.4,pc[1]),new V3(pa[0],y0+2.4,pa[1]),new V3(nx,0,nz),[0,0],[ll/6,0],[ll/6,1],[0,1]);
+      S.hoardBL.push(dbBL([[pa[0]-nx*.06,pa[1]-nz*.06],[pc[0]-nx*.06,pc[1]-nz*.06],[pc[0]+nx*.06,pc[1]+nz*.06],[pa[0]+nx*.06,pa[1]+nz*.06]],0,y0+2.4,null));}}
+  S.hoard=Q.mesh(mat,false);S.gate=gate;}
+/* ---------------------------------------------------------------- 10. construction sites: a day of game time from wreck to good as new */
+function dbSiteStart(o,kind,elapsed){let S=DB.sites.get(o);if(!S){S={};DB.sites.set(o,S);}S.kind=kind;S.t0=DB.tot-(elapsed||0);S.o=o;DB.dirty=true;dbHoarding(o);}
+function dbGM(){return (typeof gameMin!=='undefined'?gameMin:0);}
+function dbClock(){const g=dbGM();if(DB.lastMin==null){DB.lastMin=g;return;}let d=g-DB.lastMin;if(d<0)d+=1440;if(d>0&&d<720)DB.tot+=d;DB.lastMin=g;}
+function dbWorker(){const g=new THREE.Group();g.userData.db=1;const vest=std('#ff7a1a',.7),skin=std('#c8956a',.8),pant=std('#2f3b57',.85),hat=std('#ffd400',.4);
+  const add=(geo,m,x,y,z)=>{const q=new THREE.Mesh(geo,m);q.position.set(x,y,z);q.castShadow=true;g.add(q);return q;};const bx=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
+  add(bx(.42,.55,.26),vest,0,1.18,0);const l1=add(bx(.15,.78,.17),pant,-.11,.47,0),l2=add(bx(.15,.78,.17),pant,.11,.47,0);add(new THREE.SphereGeometry(.15,10,8),skin,0,1.62,0);add(new THREE.SphereGeometry(.17,10,6,0,TAU,0,Math.PI/2),hat,0,1.68,0);
+  const arm=add(bx(.12,.55,.12),vest,.28,1.15,0);arm.geometry.translate(0,-.22,0);arm.position.y=1.38;const tool=add(bx(.06,.06,.35),std('#555',.5,.6),0,-.48,.12);arm.add(tool);tool.position.set(0,-.5,.1);g.userData.arm=arm;g.userData.legs=[l1,l2];return g;}
+function dbDigger(){const g=new THREE.Group();g.userData.db=1;const y=std('#f2b300',.6),k=std('#222',.8);const add=(geo,m,x,yy,z,p)=>{const q=new THREE.Mesh(geo,m);q.position.set(x,yy,z);q.castShadow=true;(p||g).add(q);return q;};
+  add(new THREE.BoxGeometry(2.4,.7,3.2),k,0,.35,0);const top=new THREE.Group();top.position.y=.8;g.add(top);add(new THREE.BoxGeometry(2.2,1,2.4),y,0,.5,-.2,top);add(new THREE.BoxGeometry(1,1.1,1),std('#9fc8d8',.2,.3),-.55,1.5,.3,top);
+  const boom=new THREE.Group();boom.position.set(.5,1,1);top.add(boom);add(new THREE.BoxGeometry(.35,.35,3.2),y,0,0,1.6,boom);const stick=new THREE.Group();stick.position.set(0,0,3.2);boom.add(stick);add(new THREE.BoxGeometry(.3,.3,2.2),y,0,-1.1,0,stick).rotation.x=Math.PI/2;
+  add(new THREE.BoxGeometry(.9,.6,.7),k,0,-2.2,.2,stick);g.userData.top=top;g.userData.boom=boom;g.userData.stick=stick;return g;}
+function dbScaffold(o){const S=DB.sites.get(o);if(S.scaf)return;const H=o.h+1.5,base=o.base||0;const ccw=o.area>0?1:-1;const off=.9;const p=o.pts;const pos=[];
+  for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3)continue;const nx=dz/L*ccw,nz=-dx/L*ccw;const n=Math.max(1,Math.round(L/2));
+    for(let j=0;j<=n;j++){const t=j/n;pos.push(['v',a[0]+dx*t+nx*off,a[1]+dz*t+nz*off]);}pos.push(['e',a[0]+nx*off,a[1]+nz*off,c[0]+nx*off,c[1]+nz*off,L]);}
+  const nv=pos.filter(q=>q[0]==='v').length,ne=pos.filter(q=>q[0]==='e').length,rings=Math.ceil(H/2);const geo=new THREE.CylinderGeometry(.035,.035,1,5);const im=new THREE.InstancedMesh(geo,std('#c8a86a',.8),nv+ne*rings);im.userData.db=1;im.castShadow=false;const q=new THREE.Quaternion(),sc=new V3(),pp=new V3();let k=0;
+  S.scafV=[];for(const e of pos){if(e[0]==='v'){S.scafV.push(k);pp.set(e[1],base+H/2,e[2]);sc.set(1,H,1);q.identity();_dbM4.compose(pp,q,sc);im.setMatrixAt(k++,_dbM4);}else{for(let r=1;r<=rings;r++){pp.set((e[1]+e[3])/2,base+r*2,(e[2]+e[4])/2);q.setFromUnitVectors(new V3(0,1,0),new V3(e[3]-e[1],0,e[4]-e[2]).normalize());sc.set(1,e[5],1);_dbM4.compose(pp,q,sc);im.setMatrixAt(k++,_dbM4);}}}
+  scene.add(im);S.scaf=im;S.scafH=H;
+  // green dust net, one sheet per side
+  const Q=new DQ();for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3)continue;const nx=dz/L*ccw,nz=-dx/L*ccw;const o2=off+.15;
+    Q.quad(new V3(a[0]+nx*o2,base,a[1]+nz*o2),new V3(c[0]+nx*o2,base,c[1]+nz*o2),new V3(c[0]+nx*o2,base+H,c[1]+nz*o2),new V3(a[0]+nx*o2,base+H,a[1]+nz*o2),new V3(nx,0,nz),[0,0],[L/3,0],[L/3,H/3],[0,H/3]);}
+  if(!DBM.net){const [c,g]=cvs(64,64);g.fillStyle='rgba(30,120,60,.62)';g.fillRect(0,0,64,64);g.strokeStyle='rgba(10,60,25,.7)';for(let i=0;i<64;i+=8){g.beginPath();g.moveTo(i,0);g.lineTo(i,64);g.stroke();g.beginPath();g.moveTo(0,i);g.lineTo(64,i);g.stroke();}DBM.net=new THREE.MeshStandardMaterial({map:ctex(c,true),transparent:true,side:THREE.DoubleSide,depthWrite:false,roughness:.9});}
+  S.net=Q.mesh(DBM.net,false);S.net.renderOrder=2;}
+// the new building: walls written floor by floor so it can rise with a draw range
+function dbShell(o){const S=DB.sites.get(o);if(S.shell)return;const mat=o.dbMat||DBM.con;const tw=(mat.userData&&mat.userData.tw)||12,th=(mat.userData&&mat.userData.th)||12;const base=o.base||0,H=o.h;const nF=Math.max(1,Math.round(H/FLOOR)),fh=H/nF;const ccw=o.area>0?1:-1;const p=o.pts;const Q=new DQ();S.floorV=[];
+  for(let f=0;f<nF;f++){const y0=base+f*fh,y1=y0+fh;let run=0;for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.05)continue;const n=new V3(dz/L*ccw,0,-dx/L*ccw);
+      Q.quad(new V3(a[0],y0,a[1]),new V3(c[0],y0,c[1]),new V3(c[0],y1,c[1]),new V3(a[0],y1,a[1]),n,[run/tw,(y0-base)/th],[(run+L)/tw,(y0-base)/th],[(run+L)/tw,(y1-base)/th],[run/tw,(y1-base)/th]);run+=L;}
+    // a concrete lid on the floor reached so far (shown only while it is the top)
+    S.floorV.push(Q.v);}
+  dbMats();S.shell=Q.mesh(mat,true);S.shell.geometry.setDrawRange(0,0);
+  const lid=new DQ();const tri=THREE.ShapeUtils.triangulateShape(p.map(q=>new THREE.Vector2(q[0],q[1])),[]);for(const t of tri){const a=p[t[0]],b=p[t[1]],c=p[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [q1,q2,q3]=cr<0?[a,b,c]:[a,c,b];lid.tri(new V3(q1[0],0,q1[1]),new V3(q2[0],0,q2[1]),new V3(q3[0],0,q3[1]),new V3(0,1,0),[q1[0]/4,q1[1]/4],[q2[0]/4,q2[1]/4],[q3[0]/4,q3[1]/4]);}
+  S.lid=lid.mesh(DBM.floor,false);S.fh=fh;S.nF=nF;}
+function dbSiteTick(S,dt){const o=S.o;const u=(DB.tot-S.t0)/DB_DAY;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;const near=Math.hypot(PLAYER.x-cx,PLAYER.z-cz)<260;
+  if(u>=1){dbSiteFinish(S);return true;}
+  // the heap rises out of the dust after a collapse, and is carted away in the second quarter of the day
+  if(S.heap){if(S.grow!=null&&S.grow<1){S.grow=Math.min(1,S.grow+dt/1.4);S.heap.scale.y=.05+.95*(1-(1-S.grow)**3);}
+    if(u>.5){const k=clamp(1-(u-.5)/.12,0,1);S.heap.scale.y=Math.max(.001,k);S.heap.position.y=(o.base||0)*(1-k);if(k<=0){scene.remove(S.heap);S.heap=null;for(const b of S.heapBL||[])b.soft=true;S.heapBL=null;}}}
+  const crew=u>.5&&!(S.scareT>DB.tot);
+  if(crew&&near&&!S.workers){S.workers=[];const n=DB.mob?2:4;for(let i=0;i<n;i++){const w=dbWorker();scene.add(w);S.workers.push({g:w,ph:R(0,6),i});}if(S.kind==='down'){S.dig=dbDigger();scene.add(S.dig);}}
+  if((!crew||!near)&&S.workers){for(const w of S.workers)scene.remove(w.g);S.workers=null;if(S.dig){scene.remove(S.dig);S.dig=null;}}
+  if(u>.6&&!S.scaf)dbScaffold(o);if(u>.62&&!S.shell&&S.kind==='down')dbShell(o);
+  if(S.kind==='down'&&S.shell){const k=clamp((u-.64)/.33,0,1);const nf=Math.min(S.nF,Math.floor(k*S.nF+.0001));const cnt=nf?S.floorV[nf-1]:0;S.shell.geometry.setDrawRange(0,cnt);S.lid.visible=nf>0&&nf<S.nF;S.lid.position.y=(o.base||0)+nf*S.fh;
+    if(nf>=S.nF&&!S.shellBL){S.shellBL=dbBL(o.pts,o.base>.05?o.base:0,(o.base||0)+o.h,null);}}
+  if(S.scaf){const k=S.kind==='down'?clamp((u-.6)/.06,0,1):1;S.scaf.scale.y=Math.max(.001,k);S.net.scale.y=Math.max(.001,S.kind==='down'?clamp((u-.66)/.31+.05,0,1):1);S.scaf.position.y=(o.base||0)*(1-k);S.net.position.y=(o.base||0)*(1-S.net.scale.y);}
+  // workers: on the ground by the heap, then up on the scaffold beside the newest floor
+  if(S.workers){const t=GT;const ccw=o.area>0?1:-1;const p=o.pts;const lvl=S.shell&&S.nF?Math.max(0,Math.floor(clamp((u-.64)/.33,0,1)*S.nF)-1)*S.fh:0;
+    for(const w of S.workers){const e=p[(w.i*3+1)%p.length],c=p[(w.i*3+2)%p.length];const dx=c[0]-e[0],dz=c[1]-e[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const s=(Math.sin(t*.3+w.ph)*.5+.5);
+      const x=e[0]+dx*(.2+.6*s)+nx*(S.scaf&&u>.62?.9:2.4),z=e[1]+dz*(.2+.6*s)+nz*(S.scaf&&u>.62?.9:2.4);w.g.position.set(x,(S.scaf&&u>.66?(o.base||0)+lvl:TH(x,z)),z);w.g.rotation.y=Math.atan2(-nx,-nz);const arm=w.g.userData.arm;arm.rotation.x=-1.2+Math.sin(t*7+w.ph)*.9;
+      if(near&&Math.hypot(PLAYER.x-x,PLAYER.z-z)<22&&Math.sin(t*7+w.ph)>.97&&GT-(S.clinkT||0)>.2){S.clinkT=GT;try{tone(1900+R(-200,200),AU.ctx.currentTime,.05,'square',.03,AU.sfx);}catch(e){}}}}
+  if(S.dig){const t=GT;const p=o.pts[0];S.dig.position.set(cx+(p[0]-cx)*1.15,TH(cx,cz),cz+(p[1]-cz)*1.15);S.dig.rotation.y=Math.atan2(cx-S.dig.position.x,cz-S.dig.position.z);S.dig.userData.top.rotation.y=Math.sin(t*.4)*.6;S.dig.userData.boom.rotation.x=-.3+Math.sin(t*.8)*.25;S.dig.userData.stick.rotation.x=.4+Math.sin(t*.8+1)*.4;if(u>.62){scene.remove(S.dig);S.dig=null;}}
+  return false;}
+function dbSiteFinish(S){const o=S.o;for(const k of ['heap','hoard','scaf','net','shell','lid','dig'])if(S[k]){scene.remove(S[k]);if(S[k].geometry)S[k].geometry.dispose();}
+  for(const w of S.workers||[])scene.remove(w.g);for(const L of [S.heapBL,S.hoardBL])for(const b of L||[])b.soft=true;if(S.shellBL)S.shellBL.soft=true;
+  if(o.dbA)dbClear(o.dbA);o.soft=o.dbSoft0||false;dbHideOrig(o,false);dbFlush();DB.sites.delete(o);DB.dirty=true;}
+// a blast at a rising building knocks the scaffolding down and sets the job back; gunfire nearby sends the crew running
+function dbSiteHit(x,z,r,power){for(const [o,S] of DB.sites){if(!dbNearPoly(o.pts,x,z,r+1.5))continue;if(power>120&&S.scaf&&(DB.tot-S.t0)/DB_DAY>.6){S.t0=Math.min(DB.tot,S.t0+DB_DAY*.2);for(let i=0;i<10;i++)dbChunk(new V3(x+R(-r,r),(o.base||0)+R(1,6),z+R(-r,r)),new V3(.1,R(1,2.5),.1),new V3(R(-4,4),R(1,5),R(-4,4)),R(5,8));toast('🚧 棚架塌咗，工程要延遲');}S.scareT=DB.tot+60;}}
+/* ---------------------------------------------------------------- 11. what hits what */
+function dbFind(x,y,z){for(const b of queryB(x,z,.6)){if(b.soft&&!b.dbP)continue;if(b.soft)continue;const top=b.top??b.h;if(y>top+.4||(b.y0!=null&&y<b.y0-.4))continue;if(!dbNearPoly(b.pts,x,z,.45))continue;return b;}return null;}
+function dbOrig(b){return b&&!b.dbP&&b.pts&&b.dbMat&&!b.nomap?b:null;}
+// a hit at a point: a standing building wakes into its frame (if the blow can hurt it), a frame piece takes the damage
+function dbHitAt(pt,dir,amt,power,src){try{const b=dbFind(pt.x,pt.y,pt.z);if(!b)return false;if(b.dbP){return dbDamage(b.dbP,amt,pt,dir,power,src);}
+    const o=dbOrig(b);if(!o)return false;if(dbProtected(o)||DB.sites.has(o)&&!o.dbA){dbChips(pt,dir,1,null);return false;}
+    if(amt<=DBA.panel.armor){dbChips(pt,dir,1,null);try{smokePuff(pt.x,pt.y,pt.z,false,.35);}catch(e){}return false;}
+    const nF=Math.max(1,Math.round(o.h/FLOOR)),fh=o.h/nF;if(pt.y>(o.base||0)+Math.min(nF,DB.nmod)*fh+1&&src!=='blast'){dbChips(pt,dir,1,null);return false;}
+    const A=dbActivate(o);if(!o.dbSiteHeld){o.dbSiteHeld=true;}const near=dbPiecesNear(A,pt,src==='blast'?power:1.2);let n=0,any=false;for(const p of near){if(dbDamage(p,amt*(n?.65:1)*(src==='blast'&&p.kind==='column'?1.6:1),pt,dir,power,src))any=true;if(++n>=(src==='blast'?7:2))break;}return any;}catch(e){dbErr(e,'hit');return false;}}
+function dbPiecesNear(A,pt,r){const out=[];for(const p of A.pieces){if(!p.alive||p.dyn)continue;const d=Math.max(0,Math.abs(pt.x-p.c.x)-p.s[0]/2,Math.abs(pt.z-p.c.z)-p.s[2]/2)*.7+Math.max(0,Math.abs(pt.y-p.c.y)-p.s[1]/2);if(d<=r)out.push([d,p]);}return out.sort((a,b)=>a[0]-b[0]).map(q=>q[1]);}
+// explosions: every building in reach
+function dbBlast(x,y,z,r,amt){try{const seen=new Set();const pt=new V3(x,y,z);for(const b of queryB(x,z,r+1)){if(b.soft)continue;let o=b.dbP?b.dbP.A.o:dbOrig(b);if(!o||seen.has(o))continue;seen.add(o);if(!dbNearPoly(o.pts,x,z,r))continue;
+      if(!o.dbA){if(dbProtected(o)||DB.sites.has(o))continue;const nF=Math.max(1,Math.round(o.h/FLOOR));if(y>(o.base||0)+Math.min(nF,DB.nmod)*o.h/nF+r)continue;dbActivate(o);}
+      const A=o.dbA;if(!A)continue;const near=dbPiecesNear(A,pt,r);let n=0;for(const p of near){const d=Math.hypot(p.c.x-x,p.c.y-y,p.c.z-z);const f=Math.max(.2,1-d/(r+2));const dir=new V3(p.c.x-x,0,p.c.z-z).normalize();dbDamage(p,amt*f*(p.kind==='column'?1.6:1)*(n?.85:1),pt,dir,8*f+2,'blast');if(++n>=10)break;}}
+    dbSiteHit(x,z,r,amt);}catch(e){dbErr(e,'blast');}}
+{const _rb=rocketBoom;rocketBoom=function(x,y,z){const r=_rb.apply(this,arguments);dbBlast(x,y,z,5.2,420);return r;};}
+{const _bl=blast;blast=function(x,y,z,rr,big){const r=_bl.apply(this,arguments);dbBlast(x,y,z,Math.max(2.5,(rr||4)*.8),150*(big||1));return r;};}
+{const _ex=explode;explode=function(v){const x=v.x,z=v.z,y=(v.y||0)+1;const r=_ex.apply(this,arguments);dbBlast(x,y,z,4.5,260);return r;};}
+// bullets: the wall points of this shot
+{const _cs=castShot;castShot=function(o,d){const r=_cs.apply(this,arguments);if(DB.inFire&&r&&r.wall&&r.p)DB.wallHits.push([r.p.clone(),d.clone()]);return r;};}
+{const _fw=fireWeapon;fireWeapon=function(){DB.inFire=true;DB.wallHits.length=0;let r;try{r=_fw.apply(this,arguments);}finally{DB.inFire=false;}try{const w=WEAPONS[S.wpn];if(w&&DB.wallHits.length){const per=(w.dmg||20);for(const [p,d] of DB.wallHits.slice(0,8))dbHitAt(p.addScaledVector(d,.15),d,per,2,'gun');dbFlush();}}catch(e){dbErr(e,'gun');}return r;};}
+// fists and melee weapons on a wall
+{const _fh=f2Hit;f2Hit=function(def,h){const n=_fh.apply(this,arguments);try{if(!n&&!def.air){const P=PLAYER,w=WEAPONS[S.wpn];const d=new V3(Math.sin(P.h),0,Math.cos(P.h));const pt=new V3(P.x+d.x*1.05,(P.y||0)+1.2,P.z+d.z*1.05);if(solidAt(pt.x,pt.y,pt.z)){const dmg=(h[2]||w.dmg||14)*(w.id==='fist'?.35:.45)*(def.heavy?1.5:1);dbHitAt(pt,d,dmg,1.5,'melee');dbFlush();}}}catch(e){dbErr(e,'melee');}return n;};}
+// cars into buildings: the push-out now reports what it hit; the crash speed and the car's weight do the damage
+pushOut=function(o,r,y=0,step=0){let hit=null;for(const b of queryB(o.x,o.z,r)){if(b.soft||y>(b.top??b.h)-.05-step||(b.y0!=null&&y<b.y0-.05))continue;if(o.x<b.x0-r||o.x>b.x1+r||o.z<b.z0-r||o.z>b.z1+r)continue;
+    const p=b.pts;let best=1e9,bx=0,bz=0;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[j],c=p[i];const ex=c[0]-a[0],ez=c[1]-a[1];const l2=ex*ex+ez*ez||1e-9;const t=clamp(((o.x-a[0])*ex+(o.z-a[1])*ez)/l2,0,1);const px=a[0]+ex*t,pz=a[1]+ez*t;const d=(o.x-px)**2+(o.z-pz)**2;if(d<best){best=d;bx=px;bz=pz;}}
+    const inside=inPoly(o.x,o.z,p),d=Math.sqrt(best);if(inside||d<r){let nx=o.x-bx,nz=o.z-bz;const l=Math.hypot(nx,nz)||1e-6;nx/=l;nz/=l;if(inside){nx=-nx;nz=-nz;}const push=inside?d+r:r-d;o.x+=nx*push;o.z+=nz*push;hit={nx,nz,b};}}
+  if(y<11)for(const pl of PILLARS){const dx=o.x-pl[0],dz=o.z-pl[1],d=Math.hypot(dx,dz),m=r+.9;if(d<m&&d>0){o.x=pl[0]+dx/d*m;o.z=pl[1]+dz/d*m;hit={nx:dx/d,nz:dz/d};}}
+  if(hit&&hit.b&&DB.carCtx){const v=DB.carCtx;const vn=v.vx*hit.nx+v.vz*hit.nz;if(vn<-6)DB.carHits.push({b:hit.b,vn,x:o.x-hit.nx*r,z:o.z-hit.nz*r,nx:hit.nx,nz:hit.nz});}
+  return hit;};
+{const _ds=driveStep;driveStep=function(v,dt){DB.carCtx=v;DB.carHits.length=0;let r;try{r=_ds.apply(this,arguments);}finally{DB.carCtx=null;}
+  try{if(DB.carHits.length&&!((v.dbCd||0)>GT)){const h=DB.carHits.sort((a,b)=>a.vn-b.vn)[0];v.dbCd=GT+.35;const mk=v.L>7?2.6:v.L>5.2?1.6:1;const imp=-h.vn;const amt=(imp-4)*14*mk;
+      const pt=new V3(h.x,(v.y||0)+.9,h.z);const dir=new V3(-h.nx,0,-h.nz);if(dbHitAt(pt,dir,amt,imp*.4,'car')){/* broke through: keep some speed */v.vx*=1.6;v.vz*=1.6;}
+      // a hard hit also reaches the column beside the panel
+      if(amt>120){const b=h.b.dbP?h.b.dbP.A:null;if(b){const q=dbPiecesNear(b,pt,1.2).filter(p=>p.kind==='column')[0];if(q)dbDamage(q,amt*.8,pt,dir,imp*.3,'car');}}dbFlush();}}catch(e){dbErr(e,'car');}return r;};}
+// the old flat roofs (flag 1) and the custom pieces stay solid; a broken frame piece is gone from the grid
+/* ---------------------------------------------------------------- 12. save and load */
+function dbSave(){try{const w=[];for(const [o,S] of DB.sites)w.push({k:DB.key(o),e:Math.round(DB.tot-S.t0),kind:S.kind});for(const A of DB.act){if(DB.sites.has(A.o)||!A.touched)continue;w.push({k:DB.key(A.o),e:Math.round(DB.tot-(A.o.dbT0??DB.tot)),kind:'dmg'});}
+  localStorage.setItem('ylreal-wreck',JSON.stringify({w}));}catch(e){}DB.dirty=false;}
+function dbLoad(){let J=null;try{J=JSON.parse(localStorage.getItem('ylreal-wreck')||'null');}catch(e){}if(!J||!J.w||!J.w.length)return;const map=new Map();for(const o of BL){if(o.dbMat&&o.pts&&!o.nomap)map.set(DB.key(o),o);}
+  for(const r of J.w){const o=map.get(r.k);if(!o||r.e>=DB_DAY)continue;try{dbMats();if(r.kind==='down'){o.dbSoft0=o.soft;o.soft=true;dbHideOrig(o,true,true);dbRuin(o,false);dbSiteStart(o,'down',r.e);}else{dbSiteStart(o,'dmg',r.e);dbScaffold(o);}}catch(e){dbErr(e,'load');}}dbFlush();}
+/* ---------------------------------------------------------------- 13. per frame */
+function dbTick(dt){dbClock();
+  // a damaged (still standing) frame gets a repair site straight away; the day starts at the first blow
+  for(const A of DB.act){if(A.touched&&A.o.dbT0==null)A.o.dbT0=DB.tot;if(A.touched&&!A.down&&!DB.sites.has(A.o)&&DB.tot-A.o.dbT0>DB_DAY*.02){dbSiteStart(A.o,'dmg',DB.tot-A.o.dbT0);}
+    dbOverload(A,dt);}
+  for(let i=DB.bodies.length-1;i>=0;i--){const b=DB.bodies[i];const r=dbStepBody(b,Math.min(dt,1/30));
+    if(r==='break'||b.kind==='block'&&b.t>.3&&(b.sleep>0||b.p.y-b.h[1]<groundAt(b.p.x,b.p.z,b.p.y)+.5)||b.t>12){DB.bodies.splice(i,1);if(b.kind==='block'){dbShatterBlock(b);if(b.piece.A.down===false)dbCollapse(b.piece.A);}
+      else{scene.remove(b.m);const p=b.piece;dbFracture(b.p,[b.h[0]*2,b.h[1]*2,b.h[2]*2],[new V3(1,0,0).applyQuaternion(b.q),new V3(0,0,1).applyQuaternion(b.q)],b.p,b.v.clone().setY(0).normalize(),Math.min(7,b.v.length()*.5),5);try{thudSfx(.6);}catch(e){}}}}
+  dbChunksTick(dt);
+  // a repair site on a standing frame: done at the end of the day; a site on a collapsed one runs the whole rebuild
+  for(const [o,S] of [...DB.sites]){if(S.kind==='dmg'){const u=(DB.tot-S.t0)/DB_DAY;if(u>.5&&!S.scaf)dbScaffold(o);if(u>=1)dbSiteFinish(S);}else dbSiteTick(S,dt);}
+  dbFlush();DB.saveT-=dt;if(DB.saveT<=0){DB.saveT=5;if(DB.dirty||DB.sites.size)dbSave();}}
+{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on)return r;if(!started)return r;try{dbTick(dt);}catch(e){dbErr(e,'tick');}return r;};}
+addEventListener('beforeunload',()=>{try{dbSave();}catch(e){}});
+function v11aBoot(){DB.static=new Set(scene.children);DB.mob=!!(isMobile||(typeof LITE!=='undefined'&&(LITE.mob||LITE.on)));DB.nmod=DB.mob?3:6;DB.cap=DB.mob?80:250;DB.bodyCap=DB.mob?10:28;
+  try{dbProtScan();}catch(e){}try{dbLoad();}catch(e){dbErr(e,'boot');}}
 
 
 
