@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<html lang="zh-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="元朗狂飆"><meta name="theme-color" content="#ffc93c"></head><body>
 <script>(function(){var T0=Date.now(),prev=null,prevT=0;try{prev=localStorage.getItem('ylr-stage');prevT=+localStorage.getItem('ylr-stage-t')||0;}catch(e){}
 window.__YLPREV=prev;var crashed=prev&&prev!=='done'&&prev!=='html';var stage='html',err=null;
 function put(){var el=document.getElementById('ylbb');if(!el){if(!document.body)return;el=document.createElement('div');el.id='ylbb';el.style.cssText='position:fixed;left:8px;right:8px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:2147483647;font:700 12px/1.45 -apple-system,"Noto Sans HK",sans-serif;color:#2a1a0a;background:rgba(255,255,255,.82);border-radius:10px;padding:6px 10px;text-align:center;pointer-events:none';document.body.appendChild(el);}
@@ -363,7 +363,7 @@ var L=window.__YLLITE=(()=>{let force=null,reg='core';try{force=localStorage.get
   const on=force==='full'?false:force==='lite'?true:(mob||crashed||lvl>0);return {on,mob,crashed,reg,force,lvl};})();
 var REG=["core", "west", "north", "south", "east"];var reg=REG.indexOf(L.reg)>=0?L.reg:'core';
 var key=!L.on?'full':(reg==='core'&&L.lvl>0?'core'+Math.min(2,L.lvl):reg);
-var V='24.0',bs=function(t){var e=document.querySelector('#bootL .bs');if(e)e.textContent=t;},bar=function(p){var b=document.querySelector('#bootL .bar i');if(b){b.style.transition='width .3s';b.style.width=Math.max(4,Math.round(p*100))+'%';}};
+var V='24.1',bs=function(t){var e=document.querySelector('#bootL .bs');if(e)e.textContent=t;},bar=function(p){var b=document.querySelector('#bootL .bar i');if(b){b.style.transition='width .3s';b.style.width=Math.max(4,Math.round(p*100))+'%';}};
 if(L.mob){var h=document.createElement('div');h.id='webHint';h.style.cssText='margin:12px auto 0;font:700 13px/1.5 -apple-system,"Noto Sans HK",sans-serif;color:#2a1a0a;background:rgba(255,250,236,.92);border:2px solid #2a1a0a;border-radius:12px;padding:8px 12px;max-width:300px;text-align:center';
   h.innerHTML=(L.lvl>0?'<b style="color:#c8102e">上次部機中途閂咗個網頁，今次自動用更慳記憶體嘅設定</b><br>':'')+'一直開唔到？喺 WhatsApp／IG 入面開嘅話，撳「⋯」揀「用 Safari 開」';var bl=document.getElementById('bootL');if(bl)bl.appendChild(h);}
 var got=0;
@@ -377,4 +377,4 @@ function go(){YLS('下載地圖 '+key);bs('下載緊地圖……');
 function fail(m){YLS('下載失敗');bs('⚠ '+m);var bl=document.getElementById('bootL');if(bl&&!document.getElementById('webRetry')){var b=document.createElement('button');b.id='webRetry';b.textContent='再試一次';b.style.cssText='margin-top:10px;font:800 15px "Noto Sans HK",sans-serif;padding:8px 18px;border-radius:10px;border:0;background:#ffcf3a;color:#111';b.onclick=function(){location.reload();};bl.appendChild(b);}}
 go();})();
 </script>
-</body></html>
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script></body></html>

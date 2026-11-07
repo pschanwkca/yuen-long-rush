@@ -10706,3 +10706,92 @@ function digParked(){const P=PLAYER;let made=0;const want=DB.mob?2:3;const tries
 function v12aBoot(){DBW.cap=DB.mob?2:4;DBW.pcap=DB.mob?320:950;}
 {const _sg=startGame;startGame=function(){const r=_sg.apply(this,arguments);try{if(!DIG.parked){DIG.parked=true;setTimeout(()=>{try{digParked();}catch(e){}},400);}}catch(e){}return r;};}
 {const _ib=introBoot;introBoot=function(){try{v12aBoot();}catch(e){}return _ib.apply(this,arguments);};}
+
+/* =====================================================================
+   v24.1 — cooler phones, an app on the home screen
+   1. the far view: the camera stops at the fog (nothing past it is drawn), and the city's small things — props,
+      signs, trees, fittings, small instanced sets — are not drawn past a distance set by the fog; checked a slice
+      at a time so it costs nothing per frame
+   2. shadows on phones: the shadow map is off at the lower settings; people and cars get a soft round shadow
+      (one instanced draw for all of them) so they still sit on the ground
+   3. touch: no double-tap / pinch page zoom; the view resizes properly after turning the phone
+   4. home-screen app: name, icon, full screen (manifest + service worker are separate files)
+   ===================================================================== */
+const FAR={fogCap:460,list:[],seen:new Set(),i:0,scanT:0,on:true,D:220,moved:new Map(),dyn:new Set(),skyR:1200};
+function farDist(){const f=scene.fog;const ff=f?f.far:500;return Math.max(90,Math.min(ff*(PERF&&PERF.mob?.62:.8),PERF&&PERF.mob?260:420));}
+function farSphere(o){try{if(o.isInstancedMesh){const g=o.geometry;if(!g.boundingSphere)g.computeBoundingSphere();const r0=g.boundingSphere.radius;const b=new THREE.Box3(),m=new THREE.Matrix4(),p=new THREE.Vector3();
+      for(let i=0;i<o.count;i++){o.getMatrixAt(i,m);p.setFromMatrixPosition(m);b.expandByPoint(p);}if(b.isEmpty())return null;const s=b.getBoundingSphere(new THREE.Sphere());s.radius+=r0;s.center.applyMatrix4(o.matrixWorld);return s;}
+    const b=new THREE.Box3().setFromObject(o);if(b.isEmpty())return null;return b.getBoundingSphere(new THREE.Sphere());}catch(e){return null;}}
+function farDyn(){const d=FAR.dyn;for(const v of vehicles)d.add(v.g);for(const p of peds)d.add(p.g);try{d.add(PLAYER.p.g);}catch(e){}try{for(const k in NPC)if(NPC[k]&&NPC[k].g)d.add(NPC[k].g);}catch(e){}}
+function farScan(){farDyn();for(const c of scene.children){if(FAR.seen.has(c))continue;FAR.seen.add(c);
+    if(c===sky||c.isLight||c.isPoints||c.isLine||c.isCamera||FAR.dyn.has(c)||(c.userData&&c.userData.db))continue;if(!(c.isMesh||c.isGroup||c.isInstancedMesh))continue;
+    if(c.frustumCulled===false&&!c.isInstancedMesh)continue;
+    const s=farSphere(c);if(!s||s.radius>(c.isInstancedMesh?140:70))continue;FAR.list.push({o:c,c:s.center.clone(),r:s.radius,p:c.position.clone(),vis:true});}}
+function farSet(e,vis){e.vis=vis;e.o.traverse(m=>{if(vis)m.layers.enable(0);else m.layers.disable(0);});}
+function farTick(dt){if(!FAR.on||!started)return;
+  // the camera ends where the fog does; the sky dome shrinks to stay inside it
+  const f=scene.fog;if(f&&PERF&&PERF.mob&&SET.q!=='3'&&f.far>FAR.fogCap){f.near=Math.min(f.near,FAR.fogCap*.35);f.far=FAR.fogCap;}
+  if(f&&PERF&&PERF.mob){const far=Math.min(1600,f.far*1.08+40);if(Math.abs(camera.far-far)>4){camera.far=far;camera.updateProjectionMatrix();const k=Math.min(1,far*.92/FAR.skyR);sky.scale.setScalar(k);try{if(typeof stars!=='undefined'&&stars)stars.scale.setScalar(k);}catch(e){}}}
+  FAR.scanT-=dt;if(FAR.scanT<=0){FAR.scanT=6;farScan();}
+  const L=FAR.list;if(!L.length)return;const D=farDist();const cx=camera.position.x,cz=camera.position.z;const n=Math.min(L.length,Math.max(60,Math.ceil(L.length/12)));
+  for(let k=0;k<n;k++){FAR.i=(FAR.i+1)%L.length;const e=L[FAR.i];if(!e)continue;const o=e.o;
+    if(!o.parent){L.splice(FAR.i,1);continue;}
+    // anything that turns out to move is left alone
+    if(o.position.distanceToSquared(e.p)>.25){if(!e.vis)farSet(e,true);L.splice(FAR.i,1);continue;}
+    const d=Math.hypot(e.c.x-cx,e.c.z-cz)-e.r;const want=d<D;if(want!==e.vis)farSet(e,want);}}
+// far people and cars: tiny on screen, many parts each — not drawn past a distance
+function farMovers(){const cx=camera.position.x,cz=camera.position.z;const mob=PERF&&PERF.mob;const Dp=mob?110:180,Dv=mob?230:360;
+  const set=(g,vis)=>{if(g.userData.farV===vis)return;g.userData.farV=vis;g.traverse(m=>{if(vis)m.layers.enable(0);else m.layers.disable(0);});};
+  for(const p of peds){const g=p.g;if(!g)continue;set(g,Math.hypot(g.position.x-cx,g.position.z-cz)<Dp||p===PLAYER.target);}
+  for(const v of vehicles){if(v===PLAYER.car)continue;set(v.g,Math.hypot(v.x-cx,v.z-cz)<Dv||v.police||v.ems);}}
+// the city-wide instanced sets (trees, lamps, railings…): only the instances near the camera are drawn.
+// The mesh keeps its full list; reads and writes by index go to that list, so other code never notices.
+const INSTC={list:[],i:0,_m:new THREE.Matrix4(),_c:new THREE.Color()};
+function instcAdopt(m){if(m.userData.instc||m.userData.db||m.count<40)return;const n=m.count;const a=new Float32Array(n*16);a.set(m.instanceMatrix.array.subarray(0,n*16));const pos=new Float32Array(n*2);for(let i=0;i<n;i++){pos[i*2]=a[i*16+12];pos[i*2+1]=a[i*16+14];}
+  let col=null;if(m.instanceColor){col=new Float32Array(n*3);col.set(m.instanceColor.array.subarray(0,n*3));}
+  const S={m,n,a,pos,col,dirty:true,k:n};m.userData.instc=S;
+  m.setMatrixAt=function(i,mat){if(i>=S.n)return THREE.InstancedMesh.prototype.setMatrixAt.call(this,i,mat);mat.toArray(S.a,i*16);S.pos[i*2]=S.a[i*16+12];S.pos[i*2+1]=S.a[i*16+14];S.dirty=true;};
+  m.getMatrixAt=function(i,mat){if(i>=S.n)return THREE.InstancedMesh.prototype.getMatrixAt.call(this,i,mat);return mat.fromArray(S.a,i*16);};
+  if(col){m.setColorAt=function(i,c){if(i>=S.n)return THREE.InstancedMesh.prototype.setColorAt.call(this,i,c);c.toArray(S.col,i*3);S.dirty=true;};m.getColorAt=function(i,c){return c.fromArray(S.col,i*3);};}
+  Object.defineProperty(m,'count',{get(){return S.k;},set(v){if(v>S.n){S.n=v;}S.dirty=true;},configurable:true});
+  INSTC.list.push(S);}
+function instcScan(){for(const c of scene.children){if(!c.isInstancedMesh||c.userData.instc||c.userData.db||c===BLOB.m)continue;if(c.frustumCulled!==false&&c.count<200)continue;
+    const g=c.geometry;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;const A=c.instanceMatrix.array;for(let i=0;i<c.count;i++){const x=A[i*16+12],z=A[i*16+14];if(x<x0)x0=x;if(x>x1)x1=x;if(z<z0)z0=z;if(z>z1)z1=z;}
+    if(Math.max(x1-x0,z1-z0)<260)continue;instcAdopt(c);}}
+function instcPack(S,cx,cz,D2){const m=S.m,A=m.instanceMatrix.array,C=m.instanceColor?m.instanceColor.array:null;let k=0;
+  for(let i=0;i<S.n;i++){const dx=S.pos[i*2]-cx,dz=S.pos[i*2+1]-cz;if(dx*dx+dz*dz>D2)continue;A.set(S.a.subarray(i*16,i*16+16),k*16);if(C&&S.col)C.set(S.col.subarray(i*3,i*3+3),k*3);k++;}
+  S.k=k;m.instanceMatrix.needsUpdate=true;if(C)m.instanceColor.needsUpdate=true;S.cx=cx;S.cz=cz;S.dirty=false;}
+function instcTick(){const L=INSTC.list;if(!L.length)return;const cx=camera.position.x,cz=camera.position.z;const D=farDist()+40,D2=D*D;let done=0;
+  for(let k=0;k<L.length&&done<3;k++){INSTC.i=(INSTC.i+1)%L.length;const S=L[INSTC.i];if(S.dirty||S.cx==null||Math.hypot(S.cx-cx,S.cz-cz)>25){instcPack(S,cx,cz,D2);done++;}}}
+/* ---------------------------------------------------------------- 2. soft round shadows */
+const BLOB={m:null,n:0,cap:0,on:false,_m:new THREE.Matrix4(),_q:new THREE.Quaternion(),_s:new THREE.Vector3(),_p:new THREE.Vector3()};
+function blobInit(){BLOB.cap=PERF&&PERF.mob?70:140;const [c,g]=cvs(64,64);const gr=g.createRadialGradient(32,32,2,32,32,31);gr.addColorStop(0,'rgba(0,0,0,.55)');gr.addColorStop(.55,'rgba(0,0,0,.32)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);
+  const mat=new THREE.MeshBasicMaterial({map:ctex(c,true),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,toneMapped:false});const geo=new THREE.PlaneGeometry(1,1);geo.rotateX(-Math.PI/2);
+  BLOB.m=new THREE.InstancedMesh(geo,mat,BLOB.cap);BLOB.m.frustumCulled=false;BLOB.m.count=0;BLOB.m.renderOrder=1;scene.add(BLOB.m);FAR.seen.add(BLOB.m);}
+function blobPut(x,z,y,sx,sz,h){if(BLOB.n>=BLOB.cap)return;BLOB._q.setFromAxisAngle(_bUp,h||0);BLOB._s.set(sx,1,sz);BLOB._p.set(x,y+.04,z);BLOB._m.compose(BLOB._p,BLOB._q,BLOB._s);BLOB.m.setMatrixAt(BLOB.n++,BLOB._m);}
+const _bUp=new THREE.Vector3(0,1,0);
+function blobTick(){if(!BLOB.m)return;const on=!renderer.shadowMap.enabled;BLOB.m.visible=on;if(!on)return;BLOB.n=0;const cx=camera.position.x,cz=camera.position.z;const R2=PERF&&PERF.mob?55:85;
+  const P=PLAYER;if(!P.car&&!curRoom)blobPut(P.x,P.z,(P.y||0),1,1,0);
+  for(const v of vehicles){if(!v.g.visible)continue;if(Math.abs(v.x-cx)>R2||Math.abs(v.z-cz)>R2)continue;blobPut(v.x,v.z,v.y||TH(v.x,v.z),(v.W||1.9)*1.25,(v.L||4.2)*1.12,v.h);}
+  for(const p of peds){const g=p.g;if(!g.visible)continue;const x=g.position.x,z=g.position.z;if(Math.abs(x-cx)>R2||Math.abs(z-cz)>R2)continue;blobPut(x,z,g.position.y,.95,.95,0);}
+  BLOB.m.count=BLOB.n;BLOB.m.instanceMatrix.needsUpdate=true;}
+// phones: no shadow map below the top setting (the round shadows stand in)
+{const _aq=applyQuality;applyQuality=function(lv,force){const r=_aq.apply(this,arguments);try{if(PERF&&PERF.mob&&QV.lv<3){renderer.shadowMap.enabled=false;sun.castShadow=false;}}catch(e){}return r;};}
+/* ---------------------------------------------------------------- 3. touch and resize */
+function fitView(){const w=innerWidth,h=innerHeight;const c=renderer.domElement;const cw=c.clientWidth,ch=c.clientHeight;const sz=renderer.getSize(new THREE.Vector2());
+  if(Math.abs(sz.x-w)>1||Math.abs(sz.y-h)>1||Math.abs(cw-w)>1||Math.abs(ch-h)>1){renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(composer){try{composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(w,h);}catch(e){}}try{mobLayout();}catch(e){}}}
+for(const ev of ['orientationchange','resize'])addEventListener(ev,()=>{for(const t of [60,180,400,800,1500])setTimeout(fitView,t);});
+try{if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout(fitView,60));}catch(e){}
+setInterval(fitView,500);
+// no page zoom: double tap, pinch (the map's own pinch handles its canvas itself)
+{const vp=document.querySelector('meta[name=viewport]');if(vp)vp.setAttribute('content','width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover');}
+for(const ev of ['gesturestart','gesturechange','gestureend'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
+document.addEventListener('dblclick',e=>{if(!(e.target.closest&&e.target.closest('input,textarea')))e.preventDefault();},{passive:false});
+{let lastT=0;document.addEventListener('touchend',e=>{const t=performance.now();if(t-lastT<320&&!(e.target.closest&&e.target.closest('input,textarea,select')))e.preventDefault();lastT=t;},{passive:false});}
+document.addEventListener('touchmove',e=>{if(e.touches&&e.touches.length>1&&!(e.target.closest&&e.target.closest('#bigmapc,#bigmap')))e.preventDefault();},{passive:false});
+/* ---------------------------------------------------------------- frame */
+{const _u=update;update=function(dt){const r=_u(dt);try{farTick(dt);farMovers();instcTick();blobTick();}catch(e){if(!FAR.err){FAR.err=String(e);console.warn(e);}}return r;};}
+function v12bBoot(){try{FAR.skyR=sky.geometry.parameters.radius||1200;}catch(e){}blobInit();try{if(PERF&&PERF.mob&&QV.lv<3){renderer.shadowMap.enabled=false;sun.castShadow=false;}}catch(e){}
+  const st=document.createElement('style');st.textContent=`html,body,button,.tb,.hud,#touch *{touch-action:manipulation}html.mob,html.mob body,#gl,#joy,#touch .tb{touch-action:none}`;document.head.appendChild(st);
+  setTimeout(()=>{try{farScan();instcScan();}catch(e){console.warn(e);}},1500);}
+{const _ib=introBoot;introBoot=function(){try{v12bBoot();}catch(e){console.warn(e);}return _ib.apply(this,arguments);};}
