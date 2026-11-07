@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,v11bBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,v11bBoot,v11cBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -4386,7 +4386,7 @@ function pursuitUpdate(dt){const w=S.stars,cops=w>=5?0:w;GT+=0;
   const tgtX=WANT.seen?o.x:WANT.lx,tgtZ=WANT.seen?o.z:WANT.lz;
   if(cops>0){copSpawnT-=dt;const want=[0,1,3,5,10][cops];if(copSpawnT<=0&&COPS.filter(c=>c.down<=0).length<want){copSpawnT=spawnCopAt(tgtX,tgtZ)?(cops>=3?1.4:2.4):.3;}const cars=[0,0,1,2,3][cops];if(PCARS.length<cars&&rnd()<dt*.6)spawnPoliceCarAt(tgtX,tgtZ);}
   if(cops>=4)heliEnsure();else heliRemove();
-  for(let i=COPS.length-1;i>=0;i--){const c=COPS[i];const g=c.g;
+  for(let i=COPS.length-1;i>=0;i--){const c=COPS[i];if(!c)continue;const g=c.g;
     if(c.down>0){if(c.crawl)continue;c.down-=dt;if(c.down<=0){if(c.gib){scene.remove(g);COPS.splice(i,1);continue;}g.rotation.x=0;g.position.y=0;c.hp=COP_LOOK[c.kind||'patrol'].hp;}continue;}
     if(cops===0){scene.remove(g);COPS.splice(i,1);continue;}
     let x=g.position.x,z=g.position.z;const L=COP_LOOK[c.kind||'patrol'];let spd=0;let tx,tz,keep;
@@ -10050,26 +10050,26 @@ function dbSiteTick(S,dt){const o=S.o;const u=(DB.tot-S.t0)/DB_DAY;const cx=(o.x
   if(u>=1){dbSiteFinish(S);return true;}
   // the heap rises out of the dust after a collapse, and is carted away in the second quarter of the day
   if(S.heap){if(S.grow!=null&&S.grow<1){S.grow=Math.min(1,S.grow+dt/1.4);S.heap.scale.y=.05+.95*(1-(1-S.grow)**3);}
-    if(u>.5){const k=clamp(1-(u-.5)/.12,0,1);S.heap.scale.y=Math.max(.001,k);S.heap.position.y=(o.base||0)*(1-k);if(k<=0){scene.remove(S.heap);S.heap=null;for(const b of S.heapBL||[])b.soft=true;S.heapBL=null;}}}
-  const crew=u>.5&&!(S.scareT>DB.tot);
-  if(crew&&near&&!S.workers){S.workers=[];const n=DB.mob?2:4;for(let i=0;i<n;i++){const w=dbWorker();scene.add(w);S.workers.push({g:w,ph:R(0,6),i});}if(S.kind==='down'){S.dig=dbDigger();scene.add(S.dig);}}
+    if(u>.08){const k=clamp(1-(u-.08)/.22,0,1);S.heap.scale.y=Math.max(.001,k);S.heap.position.y=(o.base||0)*(1-k);if(k<=0){scene.remove(S.heap);S.heap=null;for(const b of S.heapBL||[])b.soft=true;S.heapBL=null;}}}
+  const crew=u>.06&&!(S.scareT>DB.tot);
+  if(crew&&near&&!S.workers){S.workers=[];const n=DB.mob?3:6;for(let i=0;i<n;i++){const w=dbWorker();scene.add(w);S.workers.push({g:w,ph:R(0,6),i});}if(S.kind==='down'){S.dig=dbDigger();scene.add(S.dig);}}
   if((!crew||!near)&&S.workers){for(const w of S.workers)scene.remove(w.g);S.workers=null;if(S.dig){scene.remove(S.dig);S.dig=null;}}
-  if(u>.6&&!S.scaf)dbScaffold(o);if(u>.62&&!S.shell&&S.kind==='down')dbShell(o);
-  if(S.kind==='down'&&S.shell){const k=clamp((u-.64)/.33,0,1);const nf=Math.min(S.nF,Math.floor(k*S.nF+.0001));const cnt=nf?S.floorV[nf-1]:0;S.shell.geometry.setDrawRange(0,cnt);S.lid.visible=nf>0&&nf<S.nF;S.lid.position.y=(o.base||0)+nf*S.fh;
+  if(u>.3&&!S.scaf)dbScaffold(o);if(u>.32&&!S.shell&&S.kind==='down')dbShell(o);
+  if(S.kind==='down'&&S.shell){const k=clamp((u-.36)/.6,0,1);const nf=Math.min(S.nF,Math.floor(k*S.nF+.0001));const cnt=nf?S.floorV[nf-1]:0;S.shell.geometry.setDrawRange(0,cnt);S.lid.visible=nf>0&&nf<S.nF;S.lid.position.y=(o.base||0)+nf*S.fh;
     if(nf>=S.nF&&!S.shellBL){S.shellBL=dbBL(o.pts,o.base>.05?o.base:0,(o.base||0)+o.h,null);}}
-  if(S.scaf){const k=S.kind==='down'?clamp((u-.6)/.06,0,1):1;S.scaf.scale.y=Math.max(.001,k);S.net.scale.y=Math.max(.001,S.kind==='down'?clamp((u-.66)/.31+.05,0,1):1);S.scaf.position.y=(o.base||0)*(1-k);S.net.position.y=(o.base||0)*(1-S.net.scale.y);}
+  if(S.scaf){const k=S.kind==='down'?clamp((u-.3)/.06,0,1):1;S.scaf.scale.y=Math.max(.001,k);S.net.scale.y=Math.max(.001,S.kind==='down'?clamp((u-.36)/.6+.05,0,1):1);S.scaf.position.y=(o.base||0)*(1-k);S.net.position.y=(o.base||0)*(1-S.net.scale.y);}
   // workers: on the ground by the heap, then up on the scaffold beside the newest floor
-  if(S.workers){const t=GT;const ccw=o.area>0?1:-1;const p=o.pts;const lvl=S.shell&&S.nF?Math.max(0,Math.floor(clamp((u-.64)/.33,0,1)*S.nF)-1)*S.fh:0;
+  if(S.workers){const t=GT;const ccw=o.area>0?1:-1;const p=o.pts;const lvl=S.shell&&S.nF?Math.max(0,Math.floor(clamp((u-.36)/.6,0,1)*S.nF)-1)*S.fh:0;
     for(const w of S.workers){const e=p[(w.i*3+1)%p.length],c=p[(w.i*3+2)%p.length];const dx=c[0]-e[0],dz=c[1]-e[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const s=(Math.sin(t*.3+w.ph)*.5+.5);
-      const x=e[0]+dx*(.2+.6*s)+nx*(S.scaf&&u>.62?.9:2.4),z=e[1]+dz*(.2+.6*s)+nz*(S.scaf&&u>.62?.9:2.4);w.g.position.set(x,(S.scaf&&u>.66?(o.base||0)+lvl:TH(x,z)),z);w.g.rotation.y=Math.atan2(-nx,-nz);const arm=w.g.userData.arm;arm.rotation.x=-1.2+Math.sin(t*7+w.ph)*.9;
+      const x=e[0]+dx*(.2+.6*s)+nx*(S.scaf&&u>.32?.9:2.4),z=e[1]+dz*(.2+.6*s)+nz*(S.scaf&&u>.32?.9:2.4);w.g.position.set(x,(S.scaf&&u>.36?(o.base||0)+lvl:TH(x,z)),z);w.g.rotation.y=Math.atan2(-nx,-nz);const arm=w.g.userData.arm;arm.rotation.x=-1.2+Math.sin(t*7+w.ph)*.9;
       if(near&&Math.hypot(PLAYER.x-x,PLAYER.z-z)<22&&Math.sin(t*7+w.ph)>.97&&GT-(S.clinkT||0)>.2){S.clinkT=GT;try{tone(1900+R(-200,200),AU.ctx.currentTime,.05,'square',.03,AU.sfx);}catch(e){}}}}
-  if(S.dig){const t=GT;const p=o.pts[0];S.dig.position.set(cx+(p[0]-cx)*1.15,TH(cx,cz),cz+(p[1]-cz)*1.15);S.dig.rotation.y=Math.atan2(cx-S.dig.position.x,cz-S.dig.position.z);S.dig.userData.top.rotation.y=Math.sin(t*.4)*.6;S.dig.userData.boom.rotation.x=-.3+Math.sin(t*.8)*.25;S.dig.userData.stick.rotation.x=.4+Math.sin(t*.8+1)*.4;if(u>.62){scene.remove(S.dig);S.dig=null;}}
+  if(S.dig){const t=GT;const p=o.pts[0];S.dig.position.set(cx+(p[0]-cx)*1.15,TH(cx,cz),cz+(p[1]-cz)*1.15);S.dig.rotation.y=Math.atan2(cx-S.dig.position.x,cz-S.dig.position.z);S.dig.userData.top.rotation.y=Math.sin(t*.4)*.6;S.dig.userData.boom.rotation.x=-.3+Math.sin(t*.8)*.25;S.dig.userData.stick.rotation.x=.4+Math.sin(t*.8+1)*.4;if(u>.3){scene.remove(S.dig);S.dig=null;}}
   return false;}
 function dbSiteFinish(S){const o=S.o;for(const k of ['heap','hoard','scaf','net','shell','lid','dig'])if(S[k]){scene.remove(S[k]);if(S[k].geometry)S[k].geometry.dispose();}
   for(const w of S.workers||[])scene.remove(w.g);for(const L of [S.heapBL,S.hoardBL])for(const b of L||[])b.soft=true;if(S.shellBL)S.shellBL.soft=true;
   if(o.dbA)dbClear(o.dbA);o.soft=o.dbSoft0||false;dbHideOrig(o,false);dbFlush();DB.sites.delete(o);DB.dirty=true;}
 // a blast at a rising building knocks the scaffolding down and sets the job back; gunfire nearby sends the crew running
-function dbSiteHit(x,z,r,power){for(const [o,S] of DB.sites){if(!dbNearPoly(o.pts,x,z,r+1.5))continue;if(power>120&&S.scaf&&(DB.tot-S.t0)/DB_DAY>.6){S.t0=Math.min(DB.tot,S.t0+DB_DAY*.2);for(let i=0;i<10;i++)dbChunk(new V3(x+R(-r,r),(o.base||0)+R(1,6),z+R(-r,r)),new V3(.1,R(1,2.5),.1),new V3(R(-4,4),R(1,5),R(-4,4)),R(5,8));toast('🚧 棚架塌咗，工程要延遲');}S.scareT=DB.tot+60;}}
+function dbSiteHit(x,z,r,power){for(const [o,S] of DB.sites){if(!dbNearPoly(o.pts,x,z,r+1.5))continue;if(power>120&&S.scaf&&(DB.tot-S.t0)/DB_DAY>.3){S.t0=Math.min(DB.tot,S.t0+DB_DAY*.2);for(let i=0;i<10;i++)dbChunk(new V3(x+R(-r,r),(o.base||0)+R(1,6),z+R(-r,r)),new V3(.1,R(1,2.5),.1),new V3(R(-4,4),R(1,5),R(-4,4)),R(5,8));toast('🚧 棚架塌咗，工程要延遲');}S.scareT=DB.tot+60;}}
 /* ---------------------------------------------------------------- 11. what hits what */
 function dbFind(x,y,z){for(const b of queryB(x,z,.6)){if(b.soft&&!b.dbP)continue;if(b.soft)continue;const top=b.top??b.h;if(y>top+.4||(b.y0!=null&&y<b.y0-.4))continue;if(!dbNearPoly(b.pts,x,z,.45))continue;return b;}return null;}
 function dbOrig(b){return b&&!b.dbP&&b.pts&&b.dbMat&&!b.nomap?b:null;}
@@ -10121,7 +10121,7 @@ function dbTick(dt){dbClock();
       else{scene.remove(b.m);const p=b.piece;dbFracture(b.p,[b.h[0]*2,b.h[1]*2,b.h[2]*2],[new V3(1,0,0).applyQuaternion(b.q),new V3(0,0,1).applyQuaternion(b.q)],b.p,b.v.clone().setY(0).normalize(),Math.min(7,b.v.length()*.5),5);try{thudSfx(.6);}catch(e){}}}}
   dbChunksTick(dt);
   // a repair site on a standing frame: done at the end of the day; a site on a collapsed one runs the whole rebuild
-  for(const [o,S] of [...DB.sites]){if(S.kind==='dmg'){const u=(DB.tot-S.t0)/DB_DAY;if(u>.5&&!S.scaf)dbScaffold(o);if(u>=1)dbSiteFinish(S);}else dbSiteTick(S,dt);}
+  for(const [o,S] of [...DB.sites]){if(S.kind==='dmg'){const u=(DB.tot-S.t0)/DB_DAY;if(u>.04&&!S.scaf)dbScaffold(o);if(u>=.5)dbSiteFinish(S);else dbxDmgCrew(S,u,dt);}else dbSiteTick(S,dt);}
   dbFlush();DB.saveT-=dt;if(DB.saveT<=0){DB.saveT=5;if(DB.dirty||DB.sites.size)dbSave();}}
 {const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on&&!(typeof MP!=='undefined'&&MP.on))return r;if(!started)return r;try{dbTick(dt);}catch(e){dbErr(e,'tick');}return r;};}
 addEventListener('beforeunload',()=>{try{dbSave();}catch(e){}});
@@ -10185,7 +10185,7 @@ function dbxCordon(o){const Q=new DQ();const ccw=o.area>0?1:-1;const p=o.pts;con
   const pg=new THREE.CylinderGeometry(.05,.07,1.2,6),pm=std('#e8e8e8',.6);for(const q of posts){const s=new THREE.Mesh(pg,pm);s.position.set(q[0],TH(q[0],q[1])+.6,q[1]);g.add(s);}
   scene.add(g);return g;}
 function dbxAfterCollapse(o,mine){try{if(mine){DBX.downN++;DBX.downAll++;const v=Math.abs(o.area)*o.h*800/1e4;DBX.loss+=v;DBX.lossAll+=v;DBX.showT=12;
-      if(typeof S!=='undefined'&&S.stars<3&&typeof addHeat==='function')addHeat(HEAT_PER*3,true);}}catch(e){}
+      if(typeof S!=='undefined'&&S.stars<2&&typeof addHeat==='function')addHeat(HEAT_PER*2,true);}}catch(e){}
   if(DBX.resp.some(r=>r.o===o))return;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;const base=o.base||0;const n=DB.mob?2:3;const spots=[];
   for(let i=0;i<n;i++)spots.push({x:R(o.x0,o.x1)*.6+cx*.4,z:R(o.z0,o.z1)*.6+cz*.4,y:base+R(.8,2.2),k:1});
   DBX.resp.push({o,cx,cz,t:0,spots,state:'burn',acc:0});}
@@ -10205,9 +10205,9 @@ function dbxRespTick(R0,dt){const o=R0.o;R0.t+=dt;R0.acc+=dt;const vis=camDist(R
     if(R0.sprayT>16){R0.state='out';R0.outT=0;}}
   else if(R0.state==='out'){R0.outT=(R0.outT||0)+dt;if(R0.outT>4&&R0.crew){for(const p of R0.crew)rmPerson(p);R0.crew=null;if(R0.truck){R0.truck.script.quiet=false;emsLeave(R0.truck);}}}
   // the police line goes up while the dust settles and comes down when the crews move in
-  if(!R0.cordon&&R0.t>4&&u<.12){R0.cordon=dbxCordon(o);R0.cops=[];const p=o.pts;const ccw=o.area>0?1:-1;for(let i=0;i<(DB.mob?1:2);i++){const e=p[(i*2)%p.length],c=p[(i*2+1)%p.length];const dx=c[0]-e[0],dz=c[1]-e[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const x=(e[0]+c[0])/2+nx*5.4,z=(e[1]+c[1])/2+nz*5.4;R0.cops.push(dbxCop(x,z,Math.atan2(nx,nz)));}}
+  if(!R0.cordon&&R0.t>4&&u<.06){R0.cordon=dbxCordon(o);R0.cops=[];const p=o.pts;const ccw=o.area>0?1:-1;for(let i=0;i<(DB.mob?1:2);i++){const e=p[(i*2)%p.length],c=p[(i*2+1)%p.length];const dx=c[0]-e[0],dz=c[1]-e[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const x=(e[0]+c[0])/2+nx*5.4,z=(e[1]+c[1])/2+nz*5.4;R0.cops.push(dbxCop(x,z,Math.atan2(nx,nz)));}}
   if(R0.cops)for(const c of R0.cops){c.arms[1].rotation.x=Math.sin(GT*1.7+c.ph)>.8?-2.6:0;}
-  const done=u>=.12||!site;if(done&&R0.cordon){scene.remove(R0.cordon);R0.cordon.traverse(m=>{if(m.geometry)m.geometry.dispose();});R0.cordon=null;for(const c of R0.cops||[])rmPerson(c);R0.cops=null;}
+  const done=u>=.06||!site;if(done&&R0.cordon){scene.remove(R0.cordon);R0.cordon.traverse(m=>{if(m.geometry)m.geometry.dispose();});R0.cordon=null;for(const c of R0.cops||[])rmPerson(c);R0.cops=null;}
   if(done&&R0.state==='out'&&!R0.crew&&R0.t>40){if(R0.truck&&EMS.list.includes(R0.truck))emsLeave(R0.truck);if(R0.amb&&EMS.list.includes(R0.amb)&&!R0.ambGone)emsLeave(R0.amb);return true;}
   return false;}
 // a load or a resumed save has no response team: they only come for a fresh collapse
@@ -10232,6 +10232,87 @@ function v11bBoot(){try{const J=JSON.parse(localStorage.getItem('ylreal-wreck-st
   const st=document.createElement('style');st.textContent=`#dbChip{left:calc(16px + env(safe-area-inset-left,0px));top:calc(200px + env(safe-area-inset-top,0px));padding:5px 12px;font-size:13px;font-weight:900;white-space:nowrap;color:#ffb35c;transition:opacity .4s;pointer-events:none}
 #dbChip[data-lv="4"],#dbChip[data-lv="5"]{color:#ff6a4d}
 html.mob #dbChip{font-size:10.5px;padding:3px 8px}html.mob.por #dbChip{top:auto;bottom:calc(252px + env(safe-area-inset-bottom,0px))}`;document.head.appendChild(st);}
+
+/* =====================================================================
+   v23.0 — police, stars, crews, camera
+   1. stars come slower: no instant star for a punch or a shot; points per star more than doubled; a clean getaway is quicker
+   2. police no longer arrest: they hit and shoot until you go down; downed while wanted → you wake at 元朗警署 (fine, stars cleared,
+      weapons kept). Teachers / mum still drag you back (story flavour); the scripted story arrest (mission 10) is untouched
+   3. construction crews: on site a few minutes after a collapse, planks on the shoulder, welding sparks up the scaffold, a tower
+      crane while the floors go up; a damaged (standing) building gets a repair crew too
+   4. camera: follows round behind you when you run, stays out of walls (wider probe), never dips into the head
+   ===================================================================== */
+/* ---------------------------------------------------------------- 1. stars */
+THR[0]=3;THR[1]=10;THR[2]=20;THR[3]=34;THR[4]=52;
+Object.assign(CRIME,{assault:[0,1],gunfire:[0,1],kill:[0,4],copHit:[1,3],copKill:[2,6],misc:[0,0]});
+EVADE[1]=6;EVADE[2]=9;EVADE[3]=14;EVADE[4]=20;EVADE[5]=28;
+// firing a rocket no longer forces two stars by itself (the shot still counts as gunfire)
+{const _fr=fireRocket;fireRocket=function(){DBX.noForce=true;try{return _fr.apply(this,arguments);}finally{DBX.noForce=false;}};}
+{const _ah=addHeat;addHeat=function(n,force){if(force&&DBX.noForce)return;return _ah.apply(this,arguments);};}
+/* ---------------------------------------------------------------- 2. police fight, no arrests */
+const COPK=['patrol','ptu','sdu'];
+{const _ps=pinStart;pinStart=function(c){if(c&&COPK.includes(c.kind)&&S.m!==10){PIN.hits=0;PIN.still=0;return;}return _ps.apply(this,arguments);};}
+{const _bb=bustedBy;bustedBy=function(kind){if(S.m!==10&&(!kind||COPK.includes(kind))){bustT=0;return;}return _bb.apply(this,arguments);};}
+{const _b=busted;busted=function(){if(S.m!==10){bustT=0;return;}return _b.apply(this,arguments);};}
+// patrol officers hit harder now that the beating is the whole point
+for(const k of COPK){const L=COP_LOOK[k];if(L)L.melee=Math.max(L.melee||6,k==='patrol'?11:13);}
+// downed while wanted: the police station, not the hospital
+const PDOWN={on:false};
+{const _w=wasted;wasted=function(){if(!S.dead&&!WST.on)PDOWN.on=(S.stars||0)>0&&!(typeof MP!=='undefined'&&MP.on)&&!!LOC.police&&!FIGHT_STEPS.includes(S.m);return _w.apply(this,arguments);};}
+{const _o=WST.orig;WST.orig=function(){if(!PDOWN.on)return _o.apply(this,arguments);PDOWN.on=false;const _f=fadeTo;
+  const wrap=function(text,mid,hold){fadeTo=_f;return _f('你俾差佬打到暈低…\n醒返嘅時候已經喺元朗警署',()=>{mid();const h=LOC.police;const P=PLAYER;if(P.car)try{actCarForce();}catch(e){}
+      P.x=h.x+Math.sin(h.h)*4;P.z=h.z+Math.cos(h.h)*4;P.y=TH(P.x,P.z);P.vy=0;P.grounded=true;P.peak=P.y;P.ind=null;P.top=false;P.plat=null;P.riding=null;curRoom=null;P.h=h.h;cam.tx=P.x;cam.tz=P.z;cam.yaw=h.h+Math.PI;cam.pitch=.3;
+      const fine=Math.min(Math.max(0,S.money||0),500);if(fine)addMoney(-fine,true);setTimeout(()=>{try{say([['當值警員',`醫生睇過你冇大礙。襲警同搞事，罰款 $${fine}。武器你自己袋好，下次唔好再搞！`]]);}catch(e){}},300);},hold);};
+
+  fadeTo=wrap;try{return _o.apply(this,arguments);}finally{if(fadeTo===wrap)setTimeout(()=>{if(fadeTo===wrap)fadeTo=_f;},50);}};}
+/* ---------------------------------------------------------------- 3. construction crews */
+const CRW={plank:null,mat:null};
+function crwPlank(){if(!CRW.plank){CRW.plank=new THREE.BoxGeometry(.12,.08,2.2);CRW.mat=std('#b88a4a',.85);}const m=new THREE.Mesh(CRW.plank,CRW.mat);m.castShadow=true;return m;}
+function crwDress(w){if(w.dressed)return;w.dressed=true;const p=crwPlank();p.position.set(-.22,1.48,0);p.rotation.x=.25;w.g.add(p);w.plank=p;}
+function crwCrane(o){const g=new THREE.Group();g.userData.db=1;const H=o.h+10,base=TH(o.x1+3,o.z0-3);const y=std('#f2c300',.5),k=std('#333',.7);
+  const mast=new THREE.Mesh(new THREE.BoxGeometry(1.4,H,1.4),y);mast.position.y=H/2;mast.castShadow=true;g.add(mast);
+  for(let i=0;i<H;i+=2.4){const r=new THREE.Mesh(new THREE.BoxGeometry(1.5,.12,1.5),k);r.position.y=i;g.add(r);}
+  const top=new THREE.Group();top.position.y=H;g.add(top);const L=Math.max(18,Math.hypot(o.x1-o.x0,o.z1-o.z0)*.9);
+  const jib=new THREE.Mesh(new THREE.BoxGeometry(1,1,L),y);jib.position.z=L/2-3;top.add(jib);const cw=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.4,3),k);cw.position.z=-4.5;top.add(cw);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.4,1.6),std('#e8e8e8',.5));cab.position.set(0,-1.2,.6);top.add(cab);
+  const line=new THREE.Mesh(new THREE.BoxGeometry(.05,1,.05),k);line.geometry.translate(0,-.5,0);line.position.set(0,-.5,L*.6);top.add(line);
+  const load=new THREE.Mesh(new THREE.BoxGeometry(2.2,.4,1.2),std('#7a7a7a',.8));top.add(load);
+  g.position.set(o.x1+3,base,o.z0-3);g.userData={top,line,load,L,H};scene.add(g);return g;}
+function crwTick(S,u,dt){const o=S.o;if(!S.workers)return;const t=GT;const near=Math.hypot(PLAYER.x-(o.x0+o.x1)/2,PLAYER.z-(o.z0+o.z1)/2)<120;
+  for(const w of S.workers){crwDress(w);const up=S.scaf&&u>.36;const carry=!up&&u<.32&&w.i%2===0;w.plank.visible=carry;
+    const L=w.g.userData.legs;if(L){const s=Math.sin(t*6+w.ph)*(carry?.5:.25);L[0].rotation.x=s;L[1].rotation.x=-s;}
+    if(up&&near&&w.i%2===1&&Math.sin(t*2.3+w.ph*3)>.86&&rnd()<.5){const p=w.g.position;try{sparks(p.x+Math.sin(w.g.rotation.y)*.5,p.y+1.2,p.z+Math.cos(w.g.rotation.y)*.5,DB.mob?3:6,3);}catch(e){}}}
+  if(S.kind==='down'&&S.shell&&!S.crane&&!DB.mob||S.kind==='down'&&S.shell&&!S.crane&&DB.mob&&o.h>18)S.crane=crwCrane(o);
+  if(S.crane){const C=S.crane.userData;C.top.rotation.y=Math.sin(t*.12+1)*.9;const s=(Math.sin(t*.3)*.5+.5);const drop=4+s*(C.H-6);C.line.scale.y=drop;C.load.position.set(0,-.5-drop,C.L*.6);}}
+{const _st=dbSiteTick;dbSiteTick=function(S,dt){const r=_st.apply(this,arguments);if(r)return r;try{crwTick(S,(DB.tot-S.t0)/DB_DAY,dt);}catch(e){dbErr(e,'crew');}return r;};}
+{const _sf=dbSiteFinish;dbSiteFinish=function(S){if(S&&S.crane){scene.remove(S.crane);S.crane=null;}return _sf.apply(this,arguments);};}
+// a standing but damaged building: a small crew hammering at its foot under the scaffold
+function dbxDmgCrew(S,u,dt){const o=S.o;const near=Math.hypot(PLAYER.x-(o.x0+o.x1)/2,PLAYER.z-(o.z0+o.z1)/2)<200;const on=u>.04&&near&&!(S.scareT>DB.tot);
+  if(on&&!S.workers){S.workers=[];const n=DB.mob?2:3;for(let i=0;i<n;i++){const w=dbWorker();scene.add(w);S.workers.push({g:w,ph:R(0,6),i});}}
+  if(!on&&S.workers){for(const w of S.workers)scene.remove(w.g);S.workers=null;}if(!S.workers)return;
+  const ccw=o.area>0?1:-1,p=o.pts,t=GT;for(const w of S.workers){const e=p[(w.i*2)%p.length],c=p[(w.i*2+1)%p.length];const dx=c[0]-e[0],dz=c[1]-e[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const s=Math.sin(t*.25+w.ph)*.5+.5;
+    const x=e[0]+dx*(.2+.6*s)+nx*1.1,z=e[1]+dz*(.2+.6*s)+nz*1.1;w.g.position.set(x,TH(x,z),z);w.g.rotation.y=Math.atan2(-nx,-nz);w.g.userData.arm.rotation.x=-1.2+Math.sin(t*7+w.ph)*.9;
+    if(Math.sin(t*7+w.ph)>.97&&GT-(S.clinkT||0)>.2&&Math.hypot(PLAYER.x-x,PLAYER.z-z)<22){S.clinkT=GT;try{tone(1900+R(-200,200),AU.ctx.currentTime,.05,'square',.03,AU.sfx);}catch(e){}}}}
+/* ---------------------------------------------------------------- 4. camera */
+const CAM2={followT:0};
+{const _cu=camUpdate;camUpdate=function(dt){const P=PLAYER;
+  const foot=!P.car&&!P.riding&&!curRoom&&!P.ind&&!(typeof AIM!=='undefined'&&AIM.on)&&!WST.on&&!P.dress&&!P.dance&&!(typeof MECH!=='undefined'&&MECH.on);
+  if(foot){const sp=Math.hypot(P.vx||0,P.vz||0);const idle=performance.now()-cam.lastDrag;
+    // running for a moment with no hand on the camera: drift round behind (gently, so a turn never whips the view)
+    if(sp>2.2&&idle>1600){CAM2.followT=Math.min(1,CAM2.followT+dt*.8);const back=Math.atan2(P.vx,P.vz)+Math.PI;cam.yaw=lerpAngle(cam.yaw,back,1-Math.exp(-1.1*CAM2.followT*dt));if(cam.pitch>.42)cam.pitch=lerp(cam.pitch,.32,1-Math.exp(-.8*dt));if(cam.pitch<.05)cam.pitch=lerp(cam.pitch,.16,1-Math.exp(-.8*dt));}
+    else CAM2.followT=Math.max(0,CAM2.followT-dt*2);}
+  const r=_cu(dt);
+  // a wider probe than the single ray: two side rays and one above keep the lens out of corners and window ledges
+  if(!cam.noCol&&!curRoom&&!P.ind&&!WST.on){const tx=cam.tx,ty=cam.ty,tz=cam.tz;const cx=camera.position.x,cy=camera.position.y,cz=camera.position.z;const dx=cx-tx,dy=cy-ty,dz=cz-tz;const D=Math.hypot(dx,dy,dz);
+    if(D>1.3){const sx=-dz/D*.38,sz=dx/D*.38;let lim=D;for(const [ox,oy,oz] of [[sx,0,sz],[-sx,0,-sz],[0,.35,0]]){for(let s=.9;s<lim;s+=.4){if(solidAt(tx+dx*s/D+ox,ty+dy*s/D+oy,tz+dz*s/D+oz)){lim=Math.max(1.3,s-.3);break;}}}
+      if(lim<D-.05){CAM2.lim=CAM2.lim==null?lim:Math.min(lim,lerp(CAM2.lim,lim,1-Math.exp(-6*dt)));const k=CAM2.lim/D;camera.position.set(tx+dx*k,Math.max(ty+dy*k,TH(tx+dx*k,tz+dz*k)+.5),tz+dz*k);camera.lookAt(tx,ty,tz);}else CAM2.lim=null;}
+    // too close to the head: lift the lens a little so the character never fills the screen
+    const dd=Math.hypot(camera.position.x-tx,camera.position.z-tz);if(!P.car&&dd<1.8){camera.position.y=Math.max(camera.position.y,ty+.45*(1.8-dd));camera.lookAt(tx,ty,tz);}}
+  return r;};}
+/* ---------------------------------------------------------------- 5. phone layout fixes */
+function v11cBoot(){const st=document.createElement('style');st.textContent=`#bigmap{z-index:8!important}#dlg{z-index:9!important}
+html.mob.por #prompt{bottom:calc(352px + env(safe-area-inset-bottom,0px))}html.mob.lan #prompt{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+html.mob.por #dbChip{bottom:calc(306px + env(safe-area-inset-bottom,0px))}`;document.head.appendChild(st);}
 
 
 
