@@ -10489,3 +10489,220 @@ let BOOT_STATS=null;
 setTimeout(()=>{boot().catch(e=>console.error(e)).finally(()=>{introBoot();const b=document.getElementById('bootL');if(b){bootProg(1,'搞掂！',true);b.classList.add('done');setTimeout(()=>b.remove(),700);}hideRun();});},60);
 
 YLS('主程式行完，開始起地圖');
+
+/* =====================================================================
+   v24.0 — 拆城市 (3): any floor opens, tall blocks topple, craters in the road, drive a digger
+   1. a building that is already open can be opened again at another height: a hit on the solid part above or below
+      the broken floors cuts a new frame there (columns, panels, slabs) between new solid parts, all on one support chain
+   2. toppling: a tall, slim building that loses its columns on one side leans over that way and falls as one piece,
+      crushing what is in its path (the buildings next door, cars, people); its impact can bring the next one down
+   3. craters: a big blast at street level leaves a scorched hole with a rim of broken road; cars bump through it,
+      a burst water main sprays for a while; road crews have it filled within half a day
+   4. diggers: parked at the edge of town and beside every construction site; drive one like a car, 打 swings the bucket
+   ===================================================================== */
+const DBW={cap:null,pcap:null,topN:0};
+/* ---------------------------------------------------------------- 1. frames at any height */
+function dbwCtx(o){const mat=o.dbMat||DBM.con;const tw=(mat.userData&&mat.userData.tw)||12,th=(mat.userData&&mat.userData.th)||12;const base=o.base||0,H=o.h;const nF=Math.max(1,Math.round(H/FLOOR)),fh=H/nF;
+  const pts=o.pts;const ccw=o.area>0?1:-1;const area=Math.abs(o.area);const BAY=Math.max(4.5,Math.sqrt(area/36));
+  const edges=[];let run=0;for(let i=0;i<pts.length;i++){const a=pts[i],c=pts[(i+1)%pts.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3)continue;
+    const X=new V3(dx/L,0,dz/L);const n=new V3(dz/L*ccw,0,-dx/L*ccw);const Z=n.clone().negate();const k=Math.max(1,Math.round(L/BAY));edges.push({i,a,c,L,X,Z,n,k,run});run+=L;}
+  let per=0;{let L=0;for(const e of edges)L+=e.L;per=L/BAY*2.2+area/(BAY*BAY)*2;}
+  const nMod=Math.max(1,Math.min(nF,DB.nmod,Math.floor((DB.mob?170:420)/Math.max(8,per))));
+  return {o,mat,tw,th,base,H,nF,fh,pts,ccw,area,BAY,edges,nMod};}
+function dbwPiece(A,kind,f,bl,ctr,size,axes,extra){const p=Object.assign({kind,f,Q:null,alive:true,dyn:false,hp:DBA[kind].hp,armor:DBA[kind].armor,sup:[],dep:[],c:ctr,s:size,ax:axes,A},extra||{});p.bl=bl;bl.dbP=p;A.pieces.push(p);return p;}
+// one storey band of the frame, floors F0 .. F0+n-1, with its own merged meshes
+function dbwBuild(A,C,F0,n){const {o,mat,tw,th,base,fh,pts,BAY,edges}=C;const W={F0,n,fac:new DQ(),con:new DQ(),slab:new DQ(),levels:[]};
+  const facUV=(e)=>p=>{const s=e.run+((p.x-e.a[0])*e.X.x+(p.z-e.a[1])*e.X.z);return [s/tw,(p.y-base)/th];};
+  const conUV=nn=>p=>Math.abs(nn.y)>.5?[p.x/4,p.z/4]:Math.abs(nn.x)>Math.abs(nn.z)?[p.z/4,p.y/4]:[p.x/4,p.y/4];
+  const P=(kind,f,bl,ctr,size,axes,extra)=>{const p=dbwPiece(A,kind,f,bl,ctr,size,axes,extra);p.win=W;return p;};
+  for(let li=0;li<n;li++){const f=F0+li;const yb=base+f*fh,yt=yb+fh-SLAB;const L={cols:[],panels:[],slabs:[],ecols:[]};W.levels.push(L);
+    for(const e of edges){for(let j=0;j<e.k;j++){const t0=j/e.k,t1=(j+1)/e.k;const ax=e.a[0]+(e.c[0]-e.a[0])*t0,az=e.a[1]+(e.c[1]-e.a[1])*t0;
+        const cc=new V3(ax+e.Z.x*COL/2+e.X.x*COL/2,(yb+yt)/2,az+e.Z.z*COL/2+e.X.z*COL/2);const v0=W.fac.v,vc0=W.con.v;
+        dbBox(cc,e.X,e.Z,COL/2,(yt-yb)/2,COL/2,(fi,nn)=>fi===5?[W.fac,facUV(e)]:[W.con,conUV(nn)]);
+        const cpts=[[cc.x-e.X.x*COL/2-e.Z.x*COL/2,cc.z-e.X.z*COL/2-e.Z.z*COL/2],[cc.x+e.X.x*COL/2-e.Z.x*COL/2,cc.z+e.X.z*COL/2-e.Z.z*COL/2],[cc.x+e.X.x*COL/2+e.Z.x*COL/2,cc.z+e.X.z*COL/2+e.Z.z*COL/2],[cc.x-e.X.x*COL/2+e.Z.x*COL/2,cc.z-e.X.z*COL/2+e.Z.z*COL/2]];
+        const col=P('column',f,dbBL(cpts,yb,yt,null),cc,[COL,yt-yb,COL],[e.X,e.Z],{runs:[[W.fac,v0,W.fac.v],[W.con,vc0,W.con.v]],edge:e.i,ex:ax,ez:az});L.cols.push(col);L.ecols.push(col);
+        const pl=(t1-t0)*e.L-COL;if(pl>.25){const mid=(t0+t1)/2*e.L+COL/2;const px=e.a[0]+e.X.x*mid,pz=e.a[1]+e.X.z*mid;const pc=new V3(px+e.Z.x*PT/2,(yb+yt)/2,pz+e.Z.z*PT/2);const fv0=W.fac.v,cv0=W.con.v;
+          dbBox(pc,e.X,e.Z,pl/2,(yt-yb)/2,PT/2,(fi,nn)=>fi===5?[W.fac,facUV(e)]:[W.con,conUV(nn)]);
+          const hp2=pl/2,ppts=[[pc.x-e.X.x*hp2-e.Z.x*PT/2,pc.z-e.X.z*hp2-e.Z.z*PT/2],[pc.x+e.X.x*hp2-e.Z.x*PT/2,pc.z+e.X.z*hp2-e.Z.z*PT/2],[pc.x+e.X.x*hp2+e.Z.x*PT/2,pc.z+e.X.z*hp2+e.Z.z*PT/2],[pc.x-e.X.x*hp2+e.Z.x*PT/2,pc.z-e.X.z*hp2+e.Z.z*PT/2]];
+          L.panels.push(P('panel',f,dbBL(ppts,yb,yt,null),pc,[pl,yt-yb,PT],[e.X,e.Z],{runs:[[W.fac,fv0,W.fac.v],[W.con,cv0,W.con.v]],edge:e.i,ci:L.ecols.length-1}));}}}
+    const gx0=Math.ceil(o.x0/BAY)*BAY,gz0=Math.ceil(o.z0/BAY)*BAY;
+    for(let x=gx0;x<o.x1;x+=BAY)for(let z=gz0;z<o.z1;z+=BAY){if(!inPoly(x,z,pts)||dbEdgeD(pts,x,z)<1.6)continue;const cc=new V3(x,(yb+yt)/2,z);const v0=W.con.v;
+      dbBox(cc,new V3(1,0,0),new V3(0,0,1),COL/2,(yt-yb)/2,COL/2,(fi,nn)=>[W.con,conUV(nn)]);
+      L.cols.push(P('column',f,dbBL([[x-COL/2,z-COL/2],[x+COL/2,z-COL/2],[x+COL/2,z+COL/2],[x-COL/2,z+COL/2]],yb,yt,null),cc,[COL,yt-yb,COL],[new V3(1,0,0),new V3(0,0,1)],{runs:[[W.con,v0,W.con.v]],ex:x,ez:z,inner:true}));}
+    const sx0=Math.floor(o.x0/BAY)*BAY,sz0=Math.floor(o.z0/BAY)*BAY;
+    for(let x=sx0;x<o.x1;x+=BAY)for(let z=sz0;z<o.z1;z+=BAY){const cp=dbClip(pts,x-BAY/2,z-BAY/2,x+BAY/2,z+BAY/2);if(cp.length<3||Math.abs(dbArea(cp))<.6)continue;
+      const y1=yt+SLAB;const fv0=W.fac.v,sv0=W.slab.v,cv0=W.con.v;const tri=THREE.ShapeUtils.triangulateShape(cp.map(p=>new THREE.Vector2(p[0],p[1])),[]);const up=new V3(0,1,0),dn=new V3(0,-1,0);
+      for(const t of tri){const a=cp[t[0]],b=cp[t[1]],c=cp[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [p,q,r]=cr<0?[a,b,c]:[a,c,b];
+        W.slab.tri(new V3(p[0],y1,p[1]),new V3(q[0],y1,q[1]),new V3(r[0],y1,r[1]),up,[p[0]/4,p[1]/4],[q[0]/4,q[1]/4],[r[0]/4,r[1]/4]);W.con.tri(new V3(p[0],yt,p[1]),new V3(r[0],yt,r[1]),new V3(q[0],yt,q[1]),dn,[0,0],[0,0],[0,0]);}
+      const cv1=W.con.v;
+      for(let i=0;i<cp.length;i++){const a=cp[i],b=cp[(i+1)%cp.length];const mx=(a[0]+b[0])/2,mz=(a[1]+b[1])/2;if(!dbNearPoly(pts,mx,mz,.05)||inPoly(mx+(b[1]-a[1])*.01,mz-(b[0]-a[0])*.01,pts)&&inPoly(mx-(b[1]-a[1])*.01,mz+(b[0]-a[0])*.01,pts))continue;
+        const L2=Math.hypot(b[0]-a[0],b[1]-a[1])||1;let nx=(b[1]-a[1])/L2,nz=-(b[0]-a[0])/L2;if(inPoly(mx+nx*.2,mz+nz*.2,pts)){nx=-nx;nz=-nz;}const nn=new V3(nx,0,nz);
+        const q=[new V3(a[0],yt,a[1]),new V3(b[0],yt,b[1]),new V3(b[0],y1,b[1]),new V3(a[0],y1,a[1])];const s0=(a[0]+a[1])/tw,s1=(b[0]+b[1])/tw;W.fac.quad(q[0],q[1],q[2],q[3],nn,[s0,(yt-base)/th],[s1,(yt-base)/th],[s1,(y1-base)/th],[s0,(y1-base)/th]);}
+      let mx0=1e9,mz0=1e9,mx1=-1e9,mz1=-1e9;for(const p of cp){mx0=Math.min(mx0,p[0]);mx1=Math.max(mx1,p[0]);mz0=Math.min(mz0,p[1]);mz1=Math.max(mz1,p[1]);}
+      L.slabs.push(P('slab',f,dbBL(cp,yt,y1,null),new V3((mx0+mx1)/2,(yt+y1)/2,(mz0+mz1)/2),[mx1-mx0,SLAB,mz1-mz0],[new V3(1,0,0),new V3(0,0,1)],{runs:[[W.fac,fv0,W.fac.v],[W.slab,sv0,W.slab.v],[W.con,cv0,cv1]],poly:cp}));}}
+  W.fac.mesh(mat);W.con.mesh(DBM.con);W.slab.mesh(DBM.floor);
+  const inside=(p,poly,m)=>dbNearPoly(poly,p.x,p.z,m);
+  for(let li=0;li<n;li++){const L=W.levels[li],Lb=li?W.levels[li-1]:null;
+    for(const c of L.cols){if(!Lb)continue;for(const s of Lb.slabs)if(inside(c.c,s.poly,.4)){c.sup.push(s);s.dep.push(c);}if(!c.sup.length)c.ground=true;}
+    for(const p of L.panels){const ends=[L.ecols[p.ci],L.ecols[(p.ci+1)%L.ecols.length]].filter(Boolean);for(const c of ends){p.sup.push(c);c.dep.push(p);}p.rule='any';if(!Lb)p.ground=true;}
+    for(const s of L.slabs){for(const c of L.cols)if(inside(c.c,s.poly,COL)){s.sup.push(c);c.dep.push(s);}if(s.sup.length<2){const near=L.cols.map(c=>[Math.hypot(c.c.x-s.c.x,c.c.z-s.c.z),c]).sort((a,b)=>a[0]-b[0]).slice(0,3);for(const [,c] of near)if(!s.sup.includes(c)){s.sup.push(c);c.dep.push(s);}}s.rule='min:'+Math.min(2,s.sup.length);}}
+  W.bottom=W.levels[0].cols;W.top=W.levels[n-1].slabs;
+  const sd=[[],[],[],[]];for(const c of W.bottom){if(c.inner)continue;const e=edges.find(q=>q.i===c.edge);if(!e)continue;const k=Math.abs(e.n.x)>Math.abs(e.n.z)?(e.n.x>0?0:1):(e.n.z>0?2:3);sd[k].push(c);}W.sides=sd.filter(s=>s.length>=2);
+  for(const p of A.pieces)if(p.win===W&&p.bl)p.bl.noStand=false;
+  return W;}
+// a solid stretch of storeys (walls and roof as one group); 'block' above the frame, 'plinth' below it
+function dbwSolid(A,C,yb,yt,kind){const {o,mat,tw,th,base,pts,edges}=C;const B=new DQ();for(const e of edges){const q=[new V3(e.a[0],yb,e.a[1]),new V3(e.c[0],yb,e.c[1]),new V3(e.c[0],yt,e.c[1]),new V3(e.a[0],yt,e.a[1])];B.quad(q[0],q[1],q[2],q[3],e.n,[e.run/tw,(yb-base)/th],[(e.run+e.L)/tw,(yb-base)/th],[(e.run+e.L)/tw,(yt-base)/th],[e.run/tw,(yt-base)/th]);}
+  const tri=THREE.ShapeUtils.triangulateShape(pts.map(p=>new THREE.Vector2(p[0],p[1])),[]);const R2=new DQ();for(const t of tri){const a=pts[t[0]],b=pts[t[1]],c=pts[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [p,q,r]=cr<0?[a,b,c]:[a,c,b];
+    R2.tri(new V3(p[0],yt,p[1]),new V3(q[0],yt,q[1]),new V3(r[0],yt,r[1]),new V3(0,1,0),[p[0]/8,p[1]/8],[q[0]/8,q[1]/8],[r[0]/8,r[1]/8]);R2.tri(new V3(p[0],yb,p[1]),new V3(r[0],yb,r[1]),new V3(q[0],yb,q[1]),new V3(0,-1,0),[0,0],[0,0],[0,0]);}
+  const g=new THREE.Group();g.userData.db=1;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;const wm=B.mesh(mat);const rm=R2.mesh(DBM.inner);scene.remove(wm);scene.remove(rm);g.add(wm);g.add(rm);for(const m of [wm,rm])m.geometry.translate(-cx,-(yb+yt)/2,-cz);g.position.set(cx,(yb+yt)/2,cz);scene.add(g);
+  const p=dbwPiece(A,kind,Math.round((yb-base)/C.fh),dbBL(pts,yb,yt,null),new V3(cx,(yb+yt)/2,cz),[o.x1-o.x0,yt-yb,o.z1-o.z0],[new V3(1,0,0),new V3(0,0,1)],{grp:g,runs:[]});
+  p.fa=Math.round((yb-base)/C.fh);p.fb=Math.round((yt-base)/C.fh);p.solid=true;return p;}
+const dbwLink=(a,b)=>{a.sup.push(b);b.dep.push(a);};
+// what rests on a whole slab layer: each column on the slabs under it, a solid on half of them
+function dbwRestOn(items,slabs,rule){for(const it of items){if(it.solid){for(const s of slabs)dbwLink(it,s);it.rule='min:'+Math.max(1,Math.ceil(slabs.length*.5));continue;}
+    let k=0;for(const s of slabs)if(dbNearPoly(s.poly,it.c.x,it.c.z,.4)){dbwLink(it,s);k++;}if(!k){for(const s of slabs)dbwLink(it,s);it.rule='any';}}}
+dbActivate=function(o,hy){if(o.dbA)return o.dbA;dbMats();const t0=performance.now();const C=dbwCtx(o);const {base,H,nF,fh,nMod}=C;
+  const F0=hy==null?0:clamp(Math.floor((hy-base)/fh)-Math.floor((nMod-1)/2),0,nF-nMod);
+  const A={o,F0,pieces:[],nF,fh,nMod,base,H,BAY:C.BAY,blk:null,down:false,t:0,ground0:null,sides:null,stress:R(.6,1),wins:[],C};o.dbA=A;
+  const W=dbwBuild(A,C,F0,nMod);A.wins.push(W);A.fac=W.fac;A.con=W.con;A.slab=W.slab;A.levels=W.levels;
+  if(F0+nMod<nF){A.blk=dbwSolid(A,C,base+(F0+nMod)*fh,base+H,'block');dbwRestOn([A.blk],W.top);}
+  if(F0>0){A.plinth=dbwSolid(A,C,base,base+F0*fh,'plinth');A.plinth.ground=true;for(const c of W.bottom)dbwLink(c,A.plinth);}else for(const c of W.bottom)c.ground=true;
+  A.ground0=W.bottom;A.sides=W.sides;
+  o.dbSoft0=o.soft;o.soft=true;dbHideOrig(o,true);DB.act.add(A);dbFlush();A.ms=performance.now()-t0;return A;};
+// open the solid part S at height hy: [lower solid] + new frame + [upper solid], handing over everything S held up or rested on
+function dbwSplit(S,hy){const A=S.A,C=A.C;if(!C||A.down||!S.alive||S.dyn)return null;
+  if(A.wins.length>=DBW.cap||A.pieces.length>DBW.pcap)return null;
+  const fa=S.fa,fb=S.fb;if(fb-fa<1)return null;const n=Math.min(C.nMod,fb-fa);const fh=C.fh,base=C.base;
+  const w0=clamp(Math.floor((hy-base)/fh)-Math.floor((n-1)/2),fa,fb-n),w1=w0+n;
+  S.alive=false;dbPieceHide(S);if(S.grp){scene.remove(S.grp);}
+  for(const s of S.sup)s.dep=s.dep.filter(x=>x!==S);for(const d of S.dep)d.sup=d.sup.filter(x=>x!==S);
+  const W=dbwBuild(A,C,w0,n);A.wins.push(W);
+  let lower=null,upper=null;
+  if(w0>fa){lower=dbwSolid(A,C,base+fa*fh,base+w0*fh,S.kind==='plinth'?'plinth':'block');if(S.ground)lower.ground=true;else{for(const s of S.sup)dbwLink(lower,s);lower.rule=S.rule;}for(const c of W.bottom)dbwLink(c,lower);}
+  else{if(S.ground)for(const c of W.bottom)c.ground=true;else dbwRestOn(W.bottom,S.sup.filter(s=>s.kind==='slab'));for(const c of W.bottom)if(!c.sup.length)c.ground=true;}
+  if(w1<fb){upper=dbwSolid(A,C,base+w1*fh,base+fb*fh,'block');dbwRestOn([upper],W.top);for(const d of S.dep)dbwLink(d,upper);}
+  else dbwRestOn(S.dep.filter(d=>d.alive),W.top);
+  if(A.blk===S)A.blk=upper||null;if(A.plinth===S)A.plinth=lower;
+  dbFlush();return W;}
+// a real blow on a solid part opens it up, and the blow lands on the new frame
+{const _d=dbDamage;dbDamage=function(p,amt,pt,dir,power,src){if(p&&p.solid&&p.alive&&!p.dyn&&!p.A.down&&amt>12&&pt){const W=dbwSplit(p,pt.y);
+      if(W){const near=dbPiecesNear(p.A,pt,src==='blast'?4.5:1.6).filter(q=>q.win===W).slice(0,src==='blast'?6:2);let r=false;for(const q of near)r=_d.call(this,q,amt*(src==='blast'&&q.kind==='column'?1.6:1),pt,dir,power,src)||r;return r;}}
+    return _d.apply(this,arguments);};}
+// any band of the frame giving way brings the whole building down
+dbOverload=function(A,dt){if(A.down)return dbSettle(A,dt);const ok=c=>c.alive&&!c.dyn;let bestF=1,bestW=null,worstS=1,wsS=null;
+  for(const W of A.wins||[]){const G0=W.bottom;if(!G0||!G0.length)continue;if(!W.bottom.some(c=>c.A===A))continue;const f=G0.filter(ok).length/G0.length;if(f<bestF){bestF=f;bestW=W;}
+    for(const Sd of W.sides||[]){const sf=Sd.filter(ok).length/Sd.length;if(sf<worstS){worstS=sf;wsS=Sd;}}}
+  if(!bestW&&!wsS)return;if(bestF<=.5||worstS<=.25){A.fallW=bestF<=.5?bestW:null;A.fallS=worstS<=.25?wsS:null;dbCollapse(A);return;}
+  if(bestF<.8||worstS<.6){A.stress-=dt;if(A.stress<=0){A.stress=R(.8,1.5);const pool=(wsS&&worstS<.6?wsS:(bestW?bestW.bottom:[])).filter(ok);const c=pool[(rnd()*pool.length)|0];if(!c)return;
+    try{tone(55+R(0,20),AU.ctx.currentTime,.5,'sawtooth',.08,AU.sfx);}catch(e){}shakeNear(c.c,.22);try{smokePuff(c.c.x,c.c.y+R(-.5,1),c.c.z,false,1);}catch(e){}if(rnd()<.6)dbBreak(c,c.c,new V3(),2);}}};
+// a solid part losing its footing: the old single block still drops whole; any other brings the building down
+{const _f=dbFall;dbFall=function(p){if(p&&p.solid&&p.kind!=='plinth'&&!(p===p.A.blk&&p.A.wins.length===1)){p.alive=false;dbPieceHide(p);if(!p.A.down)dbCollapse(p.A);return;}return _f.apply(this,arguments);};}
+{const _c=dbClear;dbClear=function(A){if(A&&A.wins)for(const W of A.wins)if(W.fac!==A.fac)for(const Q of [W.fac,W.con,W.slab])if(Q.me){scene.remove(Q.me);Q.me.geometry.dispose();}return _c.apply(this,arguments);};}
+/* ---------------------------------------------------------------- 2. toppling */
+const TOP={list:[]};
+function topDir(A){const o=A.o;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;let sx=0,sz=0,n=0;const W=A.fallW||A.wins&&A.wins[0];
+  const cols=(A.fallS||[]).concat(W?W.bottom:[]);for(const c of cols){if(c.alive&&!c.dyn)continue;sx+=c.c.x-cx;sz+=c.c.z-cz;n++;}
+  if(!n)return null;const L=Math.hypot(sx,sz);if(L<.5)return null;return {x:sx/L,z:sz/L,cx,cz};}
+function topCan(A){const o=A.o;const w=o.x1-o.x0,d=o.z1-o.z0;const slim=o.h/Math.max(1,Math.min(w,d));return o.h>=16&&slim>=1.25&&TOP.list.length<(DB.mob?1:3);}
+function topGhost(o){const mat=o.dbMat||DBM.con;const tw=(mat.userData&&mat.userData.tw)||12,th=(mat.userData&&mat.userData.th)||12;const base=o.base||0,H=o.h;const pts=o.pts;const ccw=o.area>0?1:-1;const B=new DQ();let run=0;
+  for(let i=0;i<pts.length;i++){const a=pts[i],c=pts[(i+1)%pts.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3)continue;const n=new V3(dz/L*ccw,0,-dx/L*ccw);
+    B.quad(new V3(a[0],base,a[1]),new V3(c[0],base,c[1]),new V3(c[0],base+H,c[1]),new V3(a[0],base+H,a[1]),n,[run/tw,0],[(run+L)/tw,0],[(run+L)/tw,H/th],[run/tw,H/th]);run+=L;}
+  const tri=THREE.ShapeUtils.triangulateShape(pts.map(p=>new THREE.Vector2(p[0],p[1])),[]);const R2=new DQ();for(const t of tri){const a=pts[t[0]],b=pts[t[1]],c=pts[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [p,q,r]=cr<0?[a,b,c]:[a,c,b];
+    R2.tri(new V3(p[0],base+H,p[1]),new V3(q[0],base+H,q[1]),new V3(r[0],base+H,r[1]),new V3(0,1,0),[0,0],[0,0],[0,0]);R2.tri(new V3(p[0],base,p[1]),new V3(r[0],base,r[1]),new V3(q[0],base,q[1]),new V3(0,-1,0),[0,0],[0,0],[0,0]);}
+  const g=new THREE.Group();g.userData.db=1;const wm=B.mesh(mat);const rm=R2.mesh(DBM.inner);scene.remove(wm);scene.remove(rm);g.add(wm);g.add(rm);return g;}
+function topStart(A,D){const o=A.o;let best=-1e9,piv=null;for(const p of o.pts){const s=p[0]*D.x+p[1]*D.z;if(s>best){best=s;}}
+  // pivot line: the footprint's leading edge in the fall direction
+  const px=D.cx+D.x*(best-(D.cx*D.x+D.cz*D.z)),pz=D.cz+D.z*(best-(D.cx*D.x+D.cz*D.z));const base=o.base||0;
+  const g=topGhost(o);const pivot=new THREE.Group();pivot.position.set(px,base,pz);g.position.set(-px,-base,-pz);pivot.add(g);scene.add(pivot);
+  const axis=new V3(D.z,0,-D.x);// rotating +θ about this axis tips the top towards D
+  TOP.list.push({A,o,D,pivot,g,axis,th:.04,w:.16,t:0,px,pz,base,H:o.h,hit:false});toast('🏢 座樓倒緊落嚟！');try{tone(45,AU.ctx.currentTime,1.6,'sawtooth',.12,AU.sfx);}catch(e){}}
+function topTick(dt){for(let i=TOP.list.length-1;i>=0;i--){const T=TOP.list[i];T.t+=dt;const k=1.5*3*9.8/(2*Math.max(8,T.H));T.w+=k*Math.sin(T.th)*dt;T.th+=T.w*dt;
+    T.pivot.quaternion.setFromAxisAngle(T.axis,T.th);
+    if(T.t>.3&&rnd()<dt*10)try{const s=R(0,T.H)*Math.sin(T.th);smokePuff(T.px+T.D.x*s,T.base+R(1,4),T.pz+T.D.z*s,false,2);}catch(e){}
+    if(!T.hit&&(T.th>1.25||topBlocked(T))){T.hit=true;topImpact(T);}
+    if(T.hit){T.fade=(T.fade||0)+dt;if(T.fade>.05){scene.remove(T.pivot);T.pivot.traverse(m=>{if(m.geometry)m.geometry.dispose();});TOP.list.splice(i,1);}}}}
+// the falling top meets something taller than its own height at that point
+function topBlocked(T){const s=T.H*.7*Math.sin(T.th);const x=T.px+T.D.x*s,z=T.pz+T.D.z*s;const y=T.base+T.H*.7*Math.cos(T.th);if(s<6)return false;try{return solidAt(x,y,z);}catch(e){return false;}}
+function topImpact(T){const {D,px,pz,base,o}=T;const reach=T.H*Math.max(.5,Math.sin(T.th));const w=Math.max(6,Math.min(o.x1-o.x0,o.z1-o.z0));shake=Math.max(shake||0,1.3);try{boomSfx(1);thudSfx(1);}catch(e){}
+  const pX=-D.z,pZ=D.x;const n=DB.mob?10:22;
+  for(let i=0;i<n;i++){const s=R(1,reach),q=R(-.5,.5)*w;const x=px+D.x*s+pX*q,z=pz+D.z*s+pZ*q;const y=Math.max(TH(x,z),groundAt(x,z,base+30))+R(.5,2.5);const sz=R(.9,2.4);dbChunk(new V3(x,y,z),new V3(sz,sz*R(.5,1),sz),new V3(D.x*R(2,7)+R(-2,2),R(1,5),D.z*R(2,7)+R(-2,2)),R(6,10));}
+  for(let s=2;s<reach;s+=DB.mob?7:4.5)try{smokePuff(px+D.x*s+R(-2,2),base+R(.5,4),pz+D.z*s+R(-2,2),false,3.2);}catch(e){}
+  // what it lands on: the host (or a solo game) works out the damage, everyone else gets it over the network
+  if(typeof dbxClient==='function'&&dbxClient())return;DBW.noCrater=true;
+  try{for(let s=4;s<reach;s+=4.5){const x=px+D.x*s,z=pz+D.z*s;const y=TH(x,z)+R(1,3);dbBlast(x,y,z,Math.min(6,w*.45),419);
+      for(const v of vehicles){if(v===PLAYER.car&&false)continue;if(Math.hypot(v.x-x,v.z-z)<Math.max(3,w*.4)&&!v.wreck){try{explode(v);}catch(e){}}}
+      if(Math.hypot(PLAYER.x-x,PLAYER.z-z)<Math.max(2.5,w*.35)&&!PLAYER.car)try{hurtPlayer(85);}catch(e){}
+      for(const p of peds){if(!p.g.visible||p.down>0)continue;if(Math.hypot(p.g.position.x-x,p.g.position.z-z)<Math.max(2.5,w*.4))try{if(typeof hsHit==='function')hsHit(p,200,new V3(D.x,0,D.z));else p.down=9;}catch(e){p.down=9;}}}}
+  finally{DBW.noCrater=false;}}
+{const _c=dbCollapse;dbCollapse=function(A){if(!A||A.down)return _c.apply(this,arguments);const willTop=topCan(A)&&!(typeof dbxClient==='function'&&dbxClient()&&!A.hostDown);const D=willTop?topDir(A):null;
+  // every other solid part comes down with it
+  const r=_c.apply(this,arguments);if(!A.down)return r;
+  for(const p of A.pieces){if(p.solid&&p!==A.blk&&p.alive){p.alive=false;dbPieceHide(p);if(p.grp)try{dbFracture(p.c,p.s,p.ax,p.c,new V3(),2,DB.mob?4:8,true);}catch(e){}}}
+  if(D){if(A.blkB){A.blkB.m.visible=false;A.blkB.sleep=99;DB.bodies=DB.bodies.filter(b=>b!==A.blkB);A.blkDone=true;}else if(A.blk){A.blk.alive=false;dbPieceHide(A.blk);}topStart(A,D);}
+  return r;};}
+/* ---------------------------------------------------------------- 3. craters */
+const CRT={list:[],tex:null,rim:null,cone:null};
+function crtTex(){if(CRT.tex)return CRT.tex;const [c,g]=cvs(256,256);const gr=g.createRadialGradient(128,128,10,128,128,128);gr.addColorStop(0,'rgba(12,10,9,1)');gr.addColorStop(.38,'rgba(30,26,22,.97)');gr.addColorStop(.62,'rgba(52,44,36,.85)');gr.addColorStop(.85,'rgba(40,34,28,.35)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,256,256);
+  g.strokeStyle='rgba(15,12,10,.75)';g.lineWidth=2.4;for(let i=0;i<16;i++){const a=i/16*TAU+rnd()*.3;let r=60,x=128+Math.cos(a)*r,y=128+Math.sin(a)*r;g.beginPath();g.moveTo(x,y);for(let k=0;k<4;k++){r+=R(10,18);const b=a+R(-.25,.25);x=128+Math.cos(b)*r;y=128+Math.sin(b)*r;g.lineTo(x,y);}g.stroke();}
+  CRT.tex=new THREE.MeshStandardMaterial({map:ctex(c,true),transparent:true,depthWrite:false,roughness:1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});CRT.rim=std('#4a4540',.95);return CRT.tex;}
+function crtAt(x,z,r){if(DBW.noCrater)return;r=clamp(r,2.2,4.2);for(const c of CRT.list)if(Math.hypot(c.x-x,c.z-z)<r*.7){c.t0=DB.tot;return;}
+  try{if(solidAt(x,TH(x,z)+.6,z))return;}catch(e){}
+  const y=TH(x,z);const g=new THREE.Group();g.userData.db=1;const d=new THREE.Mesh(new THREE.CircleGeometry(r,24),crtTex());d.rotation.x=-Math.PI/2;d.position.y=.05;d.receiveShadow=true;g.add(d);
+  const hole=new THREE.Mesh(new THREE.CylinderGeometry(r*.42,r*.28,.5,14,1,true),std('#141210',1));hole.position.y=-.2;g.add(hole);
+  const n=DB.mob?7:13;for(let i=0;i<n;i++){const a=i/n*TAU+R(-.2,.2),rr=r*R(.62,.95);const s=R(.25,.7);const m=new THREE.Mesh(DBM.box||new THREE.BoxGeometry(1,1,1),CRT.rim);m.scale.set(s*R(1,1.8),s*R(.3,.6),s);m.position.set(Math.cos(a)*rr,s*.15,Math.sin(a)*rr);m.rotation.set(R(-.4,.4),R(0,3),R(-.4,.4));m.castShadow=true;g.add(m);}
+  g.position.set(x,y,z);scene.add(g);const C={x,z,r,g,t0:DB.tot,water:null};
+  if(rnd()<.3)C.water={t:0,ph:R(0,6)};
+  CRT.list.push(C);const cap=DB.mob?10:24;while(CRT.list.length>cap)crtRemove(CRT.list[0]);}
+function crtRemove(C){scene.remove(C.g);C.g.traverse(m=>{if(m.geometry&&m.geometry!==DBM.box)m.geometry.dispose();});if(C.cones){scene.remove(C.cones);}CRT.list.splice(CRT.list.indexOf(C),1);}
+function crtCones(C){const g=new THREE.Group();g.userData.db=1;const cm=std('#ff6a1a',.6),wm=std('#f2f2f2',.6);const geo=new THREE.ConeGeometry(.22,.7,10);for(let i=0;i<5;i++){const a=i/5*TAU;const x=C.x+Math.cos(a)*(C.r+.8),z=C.z+Math.sin(a)*(C.r+.8);const c=new THREE.Mesh(geo,cm);c.position.set(x,TH(x,z)+.35,z);g.add(c);const b=new THREE.Mesh(new THREE.CylinderGeometry(.13,.16,.1,10),wm);b.position.set(x,TH(x,z)+.42,z);g.add(b);}scene.add(g);return g;}
+function crtTick(dt){const P=PLAYER;for(let i=CRT.list.length-1;i>=0;i--){const C=CRT.list[i];const u=(DB.tot-C.t0)/DB_DAY;
+    if(u>.42&&!C.cones)C.cones=crtCones(C);if(u>=.5){crtRemove(C);continue;}
+    if(C.water&&u<.25){C.water.t+=dt;if(camDist(C.x,C.z)<120&&rnd()<(DB.mob?.5:1)){const y=TH(C.x,C.z);for(let k=0;k<(DB.mob?1:2);k++)emit(PSN,{x:C.x+R(-.3,.3),y:y+.2,z:C.z+R(-.3,.3),vx:R(-1.2,1.2),vy:R(9,12)*(.8+.2*Math.sin(GT*3+C.water.ph)),vz:R(-1.2,1.2),life:R(1,1.5),s0:.25,s1:.7,r:.7,g:.82,b:1,a:.7,grav:10});}}
+    const v=P.car;if(v&&Math.hypot(v.x-C.x,v.z-C.z)<C.r*.85){const sp=Math.abs(v.speed||0);if(sp>2){const k=Math.exp(-1.6*dt);v.vx*=k;v.vz*=k;v.pitch=(v.pitch||0)+Math.sin(GT*25)*.02*Math.min(1,sp/10);if(GT-(C.bumpT||0)>.35){C.bumpT=GT;shake=Math.max(shake||0,.25);try{thudSfx(.35);}catch(e){}}}}}}
+{const _b=dbBlast;dbBlast=function(x,y,z,r,amt){const res=_b.apply(this,arguments);try{if(amt>=250&&amt!==419&&y<TH(x,z)+2.2)crtAt(x,z,r*.7);}catch(e){dbErr(e,'crater');}return res;};}
+/* ---------------------------------------------------------------- 4. diggers */
+const DIG={list:[],arm:null};
+function digModel(){const g=new THREE.Group();const y=std('#f2b705',.5,.2),k=std('#2b2b2b',.8),gl=std('#9fd3ff',.15,.1),st=std('#5a5a5a',.6,.4);
+  for(const s of [-1,1]){const tr=new THREE.Mesh(new THREE.BoxGeometry(.7,.75,4),k);tr.position.set(s*1.15,.38,0);tr.castShadow=true;g.add(tr);}
+  const top=new THREE.Group();top.position.y=.85;g.add(top);const body=new THREE.Mesh(new THREE.BoxGeometry(2.5,1.1,3.2),y);body.position.set(0,.55,-.3);body.castShadow=true;top.add(body);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.5,1.3),y);cab.position.set(-.55,1.85,.4);cab.castShadow=true;top.add(cab);const win=new THREE.Mesh(new THREE.BoxGeometry(1.05,.85,.05),gl);win.position.set(-.55,2.05,1.07);top.add(win);
+  const cw=new THREE.Mesh(new THREE.BoxGeometry(2.4,.9,.7),k);cw.position.set(0,.75,-1.9);top.add(cw);
+  const boom=new THREE.Group();boom.position.set(.5,1.3,1.1);top.add(boom);const b1=new THREE.Mesh(new THREE.BoxGeometry(.4,.45,3.6),y);b1.position.z=1.7;b1.castShadow=true;boom.add(b1);
+  const stick=new THREE.Group();stick.position.z=3.4;boom.add(stick);const b2=new THREE.Mesh(new THREE.BoxGeometry(.32,.38,2.6),y);b2.position.z=1.2;b2.castShadow=true;stick.add(b2);
+  const bucket=new THREE.Group();bucket.position.z=2.5;stick.add(bucket);const bk=new THREE.Mesh(new THREE.BoxGeometry(1.1,.75,.8),st);bk.position.set(0,-.3,.25);bk.castShadow=true;bucket.add(bk);
+  for(let i=0;i<4;i++){const t=new THREE.Mesh(new THREE.ConeGeometry(.07,.3,5),st);t.rotation.x=Math.PI/2;t.position.set(-.38+i*.25,-.62,.65);bucket.add(t);}
+  g.userData={top,boom,stick,bucket};return g;}
+function digPose(v,k){const u=v.dig.ud;const up=Math.sin(Math.min(1,k)*Math.PI);// 0 → raised → slammed
+  u.boom.rotation.x=-.55+up*.9*(k<.5?-.6:1);u.stick.rotation.x=.9-up*(k<.5?.2:1.1);u.bucket.rotation.x=.6-up*.8;}
+function digSpawn(x,z,h){let v;try{v=spawnVehicle('car','#f2b705',x,z,h,{digger:true,ai:false,parked:true});}catch(e){return null;}
+  v.g.children.forEach(c=>c.visible=false);const m=digModel();v.g.add(m);v.dig={m,ud:m.userData,swing:0,cd:0};v.L=Math.max(v.L||4.2,4.4);v.W=Math.max(v.W||1.9,2.6);digPose(v,0);DIG.list.push(v);return v;}
+function digSwing(){const v=PLAYER.car;if(!v||!v.digger||v.dig.cd>0)return;v.dig.swing=.001;v.dig.cd=1.05;v.dig.hit=false;try{tone(160,AU.ctx.currentTime,.35,'sawtooth',.06,AU.sfx);}catch(e){}}
+function digTick(dt){for(let i=DIG.list.length-1;i>=0;i--){const v=DIG.list[i];if(!vehicles.includes(v)){DIG.list.splice(i,1);continue;}const D=v.dig;D.cd=Math.max(0,D.cd-dt);
+    // a digger crawls: whatever the engine thinks, tracks top out at walking-plus pace
+    const sp=Math.hypot(v.vx,v.vz);const MAX=7.5;if(sp>MAX){v.vx*=MAX/sp;v.vz*=MAX/sp;v.speed=Math.sign(v.speed||1)*MAX;}
+    if(D.swing>0){D.swing+=dt/.9;digPose(v,D.swing);if(!D.hit&&D.swing>=.62){D.hit=true;digImpact(v);}if(D.swing>=1){D.swing=0;digPose(v,0);}}}}
+function digImpact(v){const fx=Math.sin(v.h),fz=Math.cos(v.h);const reach=v.L/2+4.2;const dir=new V3(fx,0,fz);let any=false;
+  for(const hy of [1.4,3.4,5.4]){const x=v.x+fx*reach,z=v.z+fz*reach;const y=TH(x,z)+hy;for(const back of [0,.9,1.8]){const pt=new V3(x-fx*back,y,z-fz*back);try{if(solidAt(pt.x,pt.y,pt.z)){dbHitAt(pt,dir,340,6,'car');any=true;break;}}catch(e){}}}
+  for(const c of vehicles){if(c===v||c.wreck)continue;if(Math.hypot(c.x-(v.x+fx*reach),c.z-(v.z+fz*reach))<2.6){c.dmg=(c.dmg||0)+45;c.vx+=fx*6;c.vz+=fz*6;any=true;if(c.dmg>120)try{explode(c);}catch(e){}}}
+  for(const p of peds){if(!p.g.visible||p.down>0)continue;if(Math.hypot(p.g.position.x-(v.x+fx*reach),p.g.position.z-(v.z+fz*reach))<2.2){try{if(typeof hsHit==='function')hsHit(p,120,dir);else p.down=6;}catch(e){p.down=6;}any=true;}}
+  shake=Math.max(shake||0,any?.5:.2);try{thudSfx(any?.9:.5);}catch(e){}const px=v.x+fx*reach,pz=v.z+fz*reach;for(let i=0;i<4;i++)try{smokePuff(px+R(-1,1),TH(px,pz)+R(.3,2),pz+R(-1,1),false,1.2);}catch(e){}
+  if(any&&typeof crime==='function')try{crime('misc',null,1);}catch(e){}}
+// in a digger, 打 swings the bucket instead of shooting out of the window
+{const _fw=fireWeapon;fireWeapon=function(){if(PLAYER.car&&PLAYER.car.digger){digSwing();return;}return _fw.apply(this,arguments);};}
+{const _at=typeof attack==='function'?attack:null;if(_at)attack=function(){if(PLAYER.car&&PLAYER.car.digger){digSwing();return;}return _at.apply(this,arguments);};}
+addEventListener('keydown',e=>{if(!started||e.repeat)return;if((e.code==='KeyF'||e.code==='KeyJ')&&PLAYER.car&&PLAYER.car.digger){digSwing();e.preventDefault();}});
+addEventListener('pointerdown',e=>{if(!started||isMobile)return;if(e.button===0&&PLAYER.car&&PLAYER.car.digger&&e.target&&e.target.id==='gl')digSwing();});
+// a digger beside each new site's gate
+{const _ss=dbSiteStart;dbSiteStart=function(o,kind){const r=_ss.apply(this,arguments);try{const S=DB.sites.get(o);if(S&&kind==='down'&&!S.digV&&DIG.list.length<(DB.mob?4:8)){const p=o.pts;let bi=0,bl=0;for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const L=Math.hypot(c[0]-a[0],c[1]-a[1]);if(L>bl){bl=L;bi=i;}}
+      const a=p[bi],c=p[(bi+1)%p.length];const ccw=o.area>0?1:-1;const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const x=(a[0]+c[0])/2+nx*5.5+dx/L*4,z=(a[1]+c[1])/2+nz*5.5+dz/L*4;
+      if(!solidAt(x,TH(x,z)+1,z))S.digV=digSpawn(x,z,Math.atan2(-nx,-nz));}}catch(e){dbErr(e,'digger');}return r;};}
+function digParked(){const P=PLAYER;let made=0;const want=DB.mob?2:3;const tries=[[22,0],[0,26],[-30,8],[14,-34],[40,22],[-18,-40]];
+  for(const [dx,dz] of tries){if(made>=want)break;const x=P.x+dx,z=P.z+dz;try{if(solidAt(x,TH(x,z)+1,z)||!inWB(x,z,4))continue;let clear=true;for(const v of vehicles)if(Math.hypot(v.x-x,v.z-z)<5){clear=false;break;}if(!clear)continue;}catch(e){continue;}
+    if(digSpawn(x,z,R(0,TAU)))made++;}}
+// the cab sits high and the boom reaches far: the chase camera pulls back while you drive one
+{const _cu=camUpdate;camUpdate=function(dt){const v=PLAYER.car;if(v&&v.digger){const z0=cam.zoom;cam.zoom=Math.max(z0||1,isMobile&&innerHeight>innerWidth?2:1.6);try{const r=_cu.apply(this,arguments);camera.position.y+=1.8;camera.lookAt(cam.tx,cam.ty+1.3,cam.tz);return r;}finally{cam.zoom=z0;}}return _cu.apply(this,arguments);};}
+/* ---------------------------------------------------------------- frame */
+{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on&&!(typeof MP!=='undefined'&&MP.on))return r;if(!started)return r;try{topTick(dt);crtTick(dt);digTick(dt);}catch(e){dbErr(e,'v12a');}return r;};}
+function v12aBoot(){DBW.cap=DB.mob?2:4;DBW.pcap=DB.mob?320:950;}
+{const _sg=startGame;startGame=function(){const r=_sg.apply(this,arguments);try{if(!DIG.parked){DIG.parked=true;setTimeout(()=>{try{digParked();}catch(e){}},400);}}catch(e){}return r;};}
+{const _ib=introBoot;introBoot=function(){try{v12aBoot();}catch(e){}return _ib.apply(this,arguments);};}
