@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,v11bBoot,v11cBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,v11bBoot,v11cBoot,v11dBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -4601,7 +4601,7 @@ function wheelHint(){}
 /* ---------- black-market dealer ---------- */
 const DEALER={items:[{id:'pistol',name:'手槍',price:800,ammo:36,desc:'半自動，準'},{id:'smg',name:'衝鋒槍',price:2400,ammo:120,desc:'連發（撳住開火）'},{id:'shotgun',name:'散彈槍',price:3000,ammo:16,desc:'近距離威力大'},{id:'knife',name:'牛肉刀',price:150,desc:'近身攻擊'},{id:'molotov',name:'汽油彈 ×3',price:300,ammo:3,desc:'掟出去燒一片地'},
   {id:'a_pistol',name:'手槍子彈 ×24',price:120,ammo:24,of:'pistol'},{id:'a_smg',name:'衝鋒槍子彈 ×60',price:240,ammo:60,of:'smg'},{id:'a_shotgun',name:'散彈 ×8',price:200,ammo:8,of:'shotgun'},{id:'armor',name:'避彈衣',price:400,desc:'護甲回滿 100'}]};
-function openDealer(){const rows=DEALER.items.map(it=>{const need=it.of&&!S.weapons[it.of];const owned=!it.of&&it.id!=='armor'&&it.id!=='molotov'&&S.weapons[it.id];let btn;
+function openDealer(){const rows=DEALER.items.map(it=>{const need=it.of&&!S.weapons[it.of];const owned=!it.of&&it.id!=='armor'&&it.id!=='molotov'&&it.id!=='c4'&&S.weapons[it.id];let btn;
     if(need)btn='<button class="mbtn ghost" disabled>未有槍</button>';else if(owned)btn='<button class="mbtn ghost" disabled>已擁有</button>';else btn=`<button class="mbtn" data-buy="${it.id}" ${S.money<it.price||(it.id==='armor'&&S.armor>=100)?'disabled':''}>買</button>`;
     const sw=it.id==='armor'?'#3b86cf':it.of?'#8a6a2a':'#2a2d33';return `<div class="row"><div class="sw" style="background:${sw}"></div><div class="nm"><b>${it.name}</b><span>${it.desc||('而家有 '+ammoOf(GUNS[it.of])+' 發')}</span></div><div class="pr">$${it.price}</div>${btn}</div>`;}).join('');
   openModal('shop',`<div class="mh">黑市・阿鬼</div><div class="mq">阿鬼：「靜啲……要咩？唔好話係我度買嘅。」</div>${rows}<div class="mrow"><span class="pr">$${S.money}　護甲 ${Math.round(S.armor||0)}</span><button class="mbtn ghost" id="shopClose">走</button></div>`);
@@ -9788,7 +9788,7 @@ function v10dBoot(){}
 // the falling pieces and the debris (no physics library is needed). =====
 const DB={cur:null,tgt:null,bat:new Set(),act:new Set(),bodies:[],sites:new Map(),tot:0,lastMin:null,err:null,stats:{broken:0,down:0},prot:null,saveT:0,dirty:false,
   mob:false,nmod:6,cap:220,bodyCap:28,chunk:null,cs:[],ci:0,inFire:false,wallHits:[],carCtx:null,carHits:[],key:o=>Math.round((o.x0+o.x1)/2)+','+Math.round((o.z0+o.z1)/2)};
-const DBA={panel:{hp:90,armor:10},column:{hp:220,armor:32},slab:{hp:200,armor:30},block:{hp:1e9,armor:1e9}};
+const DBA={panel:{hp:90,armor:10},column:{hp:220,armor:32},slab:{hp:200,armor:30},block:{hp:1e9,armor:1e9},plinth:{hp:1e9,armor:1e9}};
 const DB_DAY=1440,FLOOR=3.3,SLAB=.3,COL=.7,PT=.3;
 function dbErr(e,w){if(!DB.err){DB.err=w+': '+String(e&&e.stack||e).slice(0,300);console.error('db '+w,e);}}
 /* ---------------------------------------------------------------- 1. remember which triangles belong to which building */
@@ -9825,9 +9825,10 @@ function dbFixtures(o,hide){if(hide){if(o.dbFix)return;o.dbFix=[];const cx=(o.x0
 function dbEdgeD(p,x,z){let m=1e9;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[j],c=p[i];const ex=c[0]-a[0],ez=c[1]-a[1];const l2=ex*ex+ez*ez||1e-9;const t=clamp(((x-a[0])*ex+(z-a[1])*ez)/l2,0,1);m=Math.min(m,Math.hypot(x-a[0]-ex*t,z-a[1]-ez*t));}return m;}
 function dbNearPoly(p,x,z,m){if(inPoly(x,z,p))return true;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[j],c=p[i];const ex=c[0]-a[0],ez=c[1]-a[1];const l2=ex*ex+ez*ez||1e-9;const t=clamp(((x-a[0])*ex+(z-a[1])*ez)/l2,0,1);if(Math.hypot(x-a[0]-ex*t,z-a[1]-ez*t)<m)return true;}return false;}
 /* ---------------------------------------------------------------- 2. which buildings are off limits (story and shop places) */
-function dbProtected(o){if(o.dbProt!=null)return o.dbProt;let p=false;try{if(o.t===4||o.flag||o.nomap)p=true;if(typeof POL!=='undefined'&&POL.b===o)p=true;if(typeof ylpBuilding==='function'&&ylpBuilding()===o)p=true;
+function dbSchoolLock(){return typeof S!=='undefined'&&!S.free&&(S.m|0)<16;}
+function dbProtected(o){if(o.t===4&&dbSchoolLock())return true;if(o.dbProt!=null)return o.dbProt;let p=false;try{if(o.flag||o.nomap)p=true;if(typeof POL!=='undefined'&&POL.b===o)p=true;if(typeof ylpBuilding==='function'&&ylpBuilding()===o)p=true;
   if(typeof HOMEP!=='undefined'&&inPoly((HOMEP.x0+HOMEP.x1)/2,(HOMEP.z0+HOMEP.z1)/2,o.pts))p=true;
-  if(!p&&DB.prot)for(const q of DB.prot){if(dbNearPoly(o.pts,q.x,q.z,3)){p=true;break;}}}catch(e){}return o.dbProt=p;}
+  if(!p&&DB.prot&&o.t!==4)for(const q of DB.prot){if(dbNearPoly(o.pts,q.x,q.z,3)){p=true;break;}}}catch(e){}return o.dbProt=p;}
 // fixed doors and counters (an interaction that stays put) mark their building as a story / shop place
 function dbProtScan(){DB.prot=[];try{const P0={x:PLAYER.x,z:PLAYER.z};for(const it of INTER){let a=null;try{a=it.at&&it.at();}catch(e){}if(!a||a.x==null)continue;if(Math.abs(a.x-P0.x)<.01&&Math.abs(a.z-P0.z)<.01)continue;DB.prot.push({x:a.x,z:a.z});}}catch(e){}}
 /* ---------------------------------------------------------------- 3. mesh building helpers (non-indexed, so a piece can be hidden by its vertex run) */
@@ -9852,11 +9853,12 @@ function dbMats(){if(DBM.con)return;DBM.con=new THREE.MeshStandardMaterial({colo
   DBM.floor=new THREE.MeshStandardMaterial({color:lin('#9a958c'),roughness:.9});DBM.box=new THREE.BoxGeometry(1,1,1);}
 function dbBL(pts,y0,top,owner){let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;for(const p of pts){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);}
   const b={h:top,top,base:y0,y0:y0>.05?y0:null,t:9,flag:0,pts,area:dbArea(pts),x0,z0,x1,z1,nomap:true,dbP:owner,noStand:false};const idx=BL.length;BL.push(b);gridAdd(GRID,b,idx);return b;}
-function dbActivate(o){if(o.dbA)return o.dbA;dbMats();const t0=performance.now();const mat=o.dbMat||DBM.con;const tw=(mat.userData&&mat.userData.tw)||12,th=(mat.userData&&mat.userData.th)||12;const base=o.base||0,H=o.h;
+function dbActivate(o,hy){if(o.dbA)return o.dbA;dbMats();const t0=performance.now();const mat=o.dbMat||DBM.con;const tw=(mat.userData&&mat.userData.tw)||12,th=(mat.userData&&mat.userData.th)||12;const base=o.base||0,H=o.h;
   const nF=Math.max(1,Math.round(H/FLOOR)),fh=H/nF;const pts=o.pts;const ccw=o.area>0?1:-1;const area=Math.abs(o.area);const BAY=Math.max(4.5,Math.sqrt(area/36));
   let per=0;{let L=0;for(let i=0;i<pts.length;i++){const a=pts[i],c=pts[(i+1)%pts.length];L+=Math.hypot(c[0]-a[0],c[1]-a[1]);}per=L/BAY*2.2+area/(BAY*BAY)*2;}
   const nMod=Math.max(1,Math.min(nF,DB.nmod,Math.floor((DB.mob?170:420)/Math.max(8,per))));
-  const A={o,pieces:[],nF,fh,nMod,base,H,BAY,fac:new DQ(),con:new DQ(),slab:new DQ(),blk:null,down:false,t:0,ground0:null,sides:null,stress:R(.6,1)};o.dbA=A;
+  const F0=hy==null?0:clamp(Math.floor((hy-base)/fh)-Math.floor((nMod-1)/2),0,nF-nMod);
+  const A={o,F0,pieces:[],nF,fh,nMod,base,H,BAY,fac:new DQ(),con:new DQ(),slab:new DQ(),blk:null,down:false,t:0,ground0:null,sides:null,stress:R(.6,1)};o.dbA=A;
   const P=(kind,f,Q,bl,ctr,size,axes,extra)=>{const p=Object.assign({kind,f,Q,alive:true,dyn:false,hp:DBA[kind].hp,armor:DBA[kind].armor,sup:[],dep:[],c:ctr,s:size,ax:axes,A},extra||{});p.bl=bl;bl.dbP=p;A.pieces.push(p);return p;};
   // edge columns and panels
   const edges=[];let run=0;for(let i=0;i<pts.length;i++){const a=pts[i],c=pts[(i+1)%pts.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3){continue;}
@@ -9864,7 +9866,7 @@ function dbActivate(o){if(o.dbA)return o.dbA;dbMats();const t0=performance.now()
   const facUV=(e,yb)=>p=>{const s=e.run+((p.x-e.a[0])*e.X.x+(p.z-e.a[1])*e.X.z);return [s/tw,(p.y-base)/th];};
   const conUV=n=>p=>Math.abs(n.y)>.5?[p.x/4,p.z/4]:Math.abs(n.x)>Math.abs(n.z)?[p.z/4,p.y/4]:[p.x/4,p.y/4];
   const levels=[];
-  for(let f=0;f<nMod;f++){const yb=base+f*fh,yt=yb+fh-SLAB;const L={cols:[],panels:[],slabs:[],ecols:[]};levels.push(L);
+  for(let li=0;li<nMod;li++){const f=F0+li;const yb=base+f*fh,yt=yb+fh-SLAB;const L={cols:[],panels:[],slabs:[],ecols:[]};levels.push(L);
     for(const e of edges){for(let j=0;j<e.k;j++){const t0=j/e.k,t1=(j+1)/e.k;const ax=e.a[0]+(e.c[0]-e.a[0])*t0,az=e.a[1]+(e.c[1]-e.a[1])*t0;
         // column at the start of this bay, flush with the facade
         const cc=new V3(ax+e.Z.x*COL/2+e.X.x*COL/2,(yb+yt)/2,az+e.Z.z*COL/2+e.X.z*COL/2);const Q=A.fac;const v0=Q.v;const Qc=A.con;const vc0=Qc.v;
@@ -9896,15 +9898,17 @@ function dbActivate(o){if(o.dbA)return o.dbA;dbMats();const t0=performance.now()
       let mx0=1e9,mz0=1e9,mx1=-1e9,mz1=-1e9;for(const p of cp){mx0=Math.min(mx0,p[0]);mx1=Math.max(mx1,p[0]);mz0=Math.min(mz0,p[1]);mz1=Math.max(mz1,p[1]);}
       L.slabs.push(P('slab',f,null,dbBL(cp,yt,y1,null),new V3((mx0+mx1)/2,(yt+y1)/2,(mz0+mz1)/2),[mx1-mx0,SLAB,mz1-mz0],[new V3(1,0,0),new V3(0,0,1)],{runs:[[A.fac,fv0,A.fac.v],[A.slab,sv0,A.slab.v],[A.con,cv0,cv1]],poly:cp}));}}
   // the floors above as one block
-  if(nF>nMod){const yb=base+nMod*fh,yt=base+H;const B=new DQ();for(const e of edges){const q=[new V3(e.a[0],yb,e.a[1]),new V3(e.c[0],yb,e.c[1]),new V3(e.c[0],yt,e.c[1]),new V3(e.a[0],yt,e.a[1])];B.quad(q[0],q[1],q[2],q[3],e.n,[e.run/tw,(yb-base)/th],[(e.run+e.L)/tw,(yb-base)/th],[(e.run+e.L)/tw,(yt-base)/th],[e.run/tw,(yt-base)/th]);}
+  const dbSolid=(yb,yt,kind)=>{const B=new DQ();for(const e of edges){const q=[new V3(e.a[0],yb,e.a[1]),new V3(e.c[0],yb,e.c[1]),new V3(e.c[0],yt,e.c[1]),new V3(e.a[0],yt,e.a[1])];B.quad(q[0],q[1],q[2],q[3],e.n,[e.run/tw,(yb-base)/th],[(e.run+e.L)/tw,(yb-base)/th],[(e.run+e.L)/tw,(yt-base)/th],[e.run/tw,(yt-base)/th]);}
     const tri=THREE.ShapeUtils.triangulateShape(pts.map(p=>new THREE.Vector2(p[0],p[1])),[]);const R2=new DQ();for(const t of tri){const a=pts[t[0]],b=pts[t[1]],c=pts[t[2]];const cr=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);const [p,q,r]=cr<0?[a,b,c]:[a,c,b];
       R2.tri(new V3(p[0],yt,p[1]),new V3(q[0],yt,q[1]),new V3(r[0],yt,r[1]),new V3(0,1,0),[p[0]/8,p[1]/8],[q[0]/8,q[1]/8],[r[0]/8,r[1]/8]);R2.tri(new V3(p[0],yb,p[1]),new V3(r[0],yb,r[1]),new V3(q[0],yb,q[1]),new V3(0,-1,0),[0,0],[0,0],[0,0]);}
     const g=new THREE.Group();g.userData.db=1;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;const wm=B.mesh(mat);const rm=R2.mesh(DBM.inner);scene.remove(wm);scene.remove(rm);g.add(wm);g.add(rm);for(const m of [wm,rm])m.geometry.translate(-cx,-(yb+yt)/2,-cz);g.position.set(cx,(yb+yt)/2,cz);scene.add(g);
-    const blk=P('block',nMod,null,dbBL(pts,yb,yt,null),new V3(cx,(yb+yt)/2,cz),[o.x1-o.x0,yt-yb,o.z1-o.z0],[new V3(1,0,0),new V3(0,0,1)],{grp:g,runs:[]});A.blk=blk;}
+    return P(kind,kind==='block'?F0+nMod:0,null,dbBL(pts,yb,yt,null),new V3(cx,(yb+yt)/2,cz),[o.x1-o.x0,yt-yb,o.z1-o.z0],[new V3(1,0,0),new V3(0,0,1)],{grp:g,runs:[]});};
+  if(F0+nMod<nF)A.blk=dbSolid(base+(F0+nMod)*fh,base+H,'block');
+  if(F0>0){A.plinth=dbSolid(base,base+F0*fh,'plinth');A.plinth.ground=true;}
   A.fac.mesh(mat);A.con.mesh(DBM.con);A.slab.mesh(DBM.floor);
   // supports: columns and panels stand on the slab below (or the ground); a slab rests on the columns at its corners
   const inside=(p,poly,m)=>dbNearPoly(poly,p.x,p.z,m);
-  for(let f=0;f<nMod;f++){const L=levels[f],Lb=f?levels[f-1]:null;
+  for(let li=0;li<nMod;li++){const L=levels[li],Lb=li?levels[li-1]:null;
     for(const c of L.cols){if(!Lb){c.ground=true;continue;}for(const s of Lb.slabs)if(inside(c.c,s.poly,.4)){c.sup.push(s);s.dep.push(c);}if(!c.sup.length)c.ground=true;}
     for(const p of L.panels){const ends=[L.ecols[p.ci],L.ecols[(p.ci+1)%L.ecols.length]].filter(Boolean);for(const c of ends){p.sup.push(c);c.dep.push(p);}p.rule='any';if(!Lb)p.ground=true;}
     for(const s of L.slabs){for(const c of L.cols)if(inside(c.c,s.poly,COL)){s.sup.push(c);c.dep.push(s);}if(s.sup.length<2){const near=L.cols.map(c=>[Math.hypot(c.c.x-s.c.x,c.c.z-s.c.z),c]).sort((a,b)=>a[0]-b[0]).slice(0,3);for(const [,c] of near)if(!s.sup.includes(c)){s.sup.push(c);c.dep.push(s);}}s.rule='min:'+Math.min(2,s.sup.length);}}
@@ -10077,12 +10081,11 @@ function dbOrig(b){return b&&!b.dbP&&b.pts&&b.dbMat&&!b.nomap?b:null;}
 function dbHitAt(pt,dir,amt,power,src){try{const b=dbFind(pt.x,pt.y,pt.z);if(!b)return false;if(b.dbP){return dbDamage(b.dbP,amt,pt,dir,power,src);}
     const o=dbOrig(b);if(!o)return false;if(dbProtected(o)||DB.sites.has(o)&&!o.dbA){dbChips(pt,dir,1,null);return false;}
     if(amt<=DBA.panel.armor){dbChips(pt,dir,1,null);try{smokePuff(pt.x,pt.y,pt.z,false,.35);}catch(e){}return false;}
-    const nF=Math.max(1,Math.round(o.h/FLOOR)),fh=o.h/nF;if(pt.y>(o.base||0)+Math.min(nF,DB.nmod)*fh+1&&src!=='blast'){dbChips(pt,dir,1,null);return false;}
-    const A=dbActivate(o);if(!o.dbSiteHeld){o.dbSiteHeld=true;}const near=dbPiecesNear(A,pt,src==='blast'?power:1.2);let n=0,any=false;for(const p of near){if(dbDamage(p,amt*(n?.65:1)*(src==='blast'&&p.kind==='column'?1.6:1),pt,dir,power,src))any=true;if(++n>=(src==='blast'?7:2))break;}return any;}catch(e){dbErr(e,'hit');return false;}}
+    const A=dbActivate(o,pt.y);if(!o.dbSiteHeld){o.dbSiteHeld=true;}const near=dbPiecesNear(A,pt,src==='blast'?power:1.2);let n=0,any=false;for(const p of near){if(dbDamage(p,amt*(n?.65:1)*(src==='blast'&&p.kind==='column'?1.6:1),pt,dir,power,src))any=true;if(++n>=(src==='blast'?7:2))break;}return any;}catch(e){dbErr(e,'hit');return false;}}
 function dbPiecesNear(A,pt,r){const out=[];for(const p of A.pieces){if(!p.alive||p.dyn)continue;const d=Math.max(0,Math.abs(pt.x-p.c.x)-p.s[0]/2,Math.abs(pt.z-p.c.z)-p.s[2]/2)*.7+Math.max(0,Math.abs(pt.y-p.c.y)-p.s[1]/2);if(d<=r)out.push([d,p]);}return out.sort((a,b)=>a[0]-b[0]).map(q=>q[1]);}
 // explosions: every building in reach
 function dbBlast(x,y,z,r,amt){try{const seen=new Set();const pt=new V3(x,y,z);for(const b of queryB(x,z,r+1)){if(b.soft)continue;let o=b.dbP?b.dbP.A.o:dbOrig(b);if(!o||seen.has(o))continue;seen.add(o);if(!dbNearPoly(o.pts,x,z,r))continue;
-      if(!o.dbA){if(dbProtected(o)||DB.sites.has(o))continue;const nF=Math.max(1,Math.round(o.h/FLOOR));if(y>(o.base||0)+Math.min(nF,DB.nmod)*o.h/nF+r)continue;dbActivate(o);}
+      if(!o.dbA){if(dbProtected(o)||DB.sites.has(o))continue;if(y>(o.base||0)+o.h+r)continue;dbActivate(o,y);}
       const A=o.dbA;if(!A)continue;const near=dbPiecesNear(A,pt,r);let n=0;for(const p of near){const d=Math.hypot(p.c.x-x,p.c.y-y,p.c.z-z);const f=Math.max(.2,1-d/(r+2));const dir=new V3(p.c.x-x,0,p.c.z-z).normalize();dbDamage(p,amt*f*(p.kind==='column'?1.6:1)*(n?.85:1),pt,dir,8*f+2,'blast');if(++n>=10)break;}}
     dbSiteHit(x,z,r,amt);}catch(e){dbErr(e,'blast');}}
 {const _rb=rocketBoom;rocketBoom=function(x,y,z){const r=_rb.apply(this,arguments);dbBlast(x,y,z,5.2,420);return r;};}
@@ -10313,6 +10316,86 @@ const CAM2={followT:0};
 function v11cBoot(){const st=document.createElement('style');st.textContent=`#bigmap{z-index:8!important}#dlg{z-index:9!important}
 html.mob.por #prompt{bottom:calc(352px + env(safe-area-inset-bottom,0px))}html.mob.lan #prompt{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 html.mob.por #dbChip{bottom:calc(306px + env(safe-area-inset-bottom,0px))}`;document.head.appendChild(st);}
+
+/* =====================================================================
+   v23.1 — bombs, shops, schools, any floor
+   1. 遙控炸彈 (remote bomb): thrown like a bottle, it sticks to whatever it hits (wall, ground, a car) and blinks;
+      B (or the 💥 引爆 button) sets off every bomb you have planted, one after another. Bigger than a rocket.
+      Sold by the black-market dealer; carry up to 5.
+   2. shops: when a shop front is blown in, glass and the sign come down, and whoever was inside (most shops have
+      someone) runs out into the street shouting for help, scattering the passers-by
+   3. schools can be wrecked (outside the story; during the story they stay locked) — see v11a dbProtected
+   4. any floor: the frame opens at the floors that were hit (v11a dbActivate), so upper floors break too
+   ===================================================================== */
+/* ---------------------------------------------------------------- 1. remote bomb */
+GUNS.c4={id:'c4',name:'遙控炸彈',dmg:0,range:20,cd:.55,throw:true,bomb:true,cat:'throw',max:5,rar:'rare'};WEAPONS.push(GUNS.c4);
+try{DEALER.items.push({id:'c4',name:'遙控炸彈',price:1800,ammo:3,desc:'掟出去會黐實，撳 B／💥 引爆。拆樓一流'});}catch(e){}
+const BOMB={list:[],fly:[],q:[],qT:0,btn:null,mat:null,led:null};
+function bombMesh(){if(!BOMB.mat){BOMB.mat=std('#3a3f2e',.6,.2);BOMB.led=new THREE.MeshBasicMaterial({color:0xff2020,toneMapped:false});}const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.BoxGeometry(.26,.12,.18),BOMB.mat);b.castShadow=true;g.add(b);const w=new THREE.Mesh(new THREE.BoxGeometry(.04,.13,.19),std('#c8a020',.5));w.position.x=.06;g.add(w);
+  const l=new THREE.Mesh(new THREE.SphereGeometry(.03,6,4),BOMB.led);l.position.set(-.08,.07,0);g.add(l);g.userData.led=l;return g;}
+function bombThrow(){const P=PLAYER;let D;if(AIM.on)D=camera.getWorldDirection(new V3());else D=new V3(Math.sin(P.h),0,Math.cos(P.h));
+  const o=muzzlePos();const m=bombMesh();m.position.copy(o);scene.add(m);const sp=13;BOMB.fly.push({m,vx:D.x*sp,vy:Math.max(3.6,D.y*sp+4),vz:D.z*sp,t:4,prev:o.clone()});sfx('swing');FIRE.pose=.4;
+  if(!BOMB.told){BOMB.told=true;toast(isMobile?'💥 撳「引爆」引爆炸彈':'💥 撳 B 引爆炸彈');}}
+function bombStick(b,x,y,z,car){const m=b.m;const e={m,t:0};if(car){const c=Math.cos(car.h),s=Math.sin(car.h);const dx=x-car.x,dz=z-car.z;e.car=car;e.lx=dx*c-dz*s;e.lz=dx*s+dz*c;e.ly=y-(car.y||0);}
+  m.position.set(x,y,z);BOMB.list.push(e);try{tone(1400,AU.ctx.currentTime,.05,'square',.04,AU.sfx);}catch(er){}bombBtn();}
+function bombFlyTick(dt){for(let i=BOMB.fly.length-1;i>=0;i--){const b=BOMB.fly[i],m=b.m;b.t-=dt;b.vy-=14*dt;b.prev.copy(m.position);const nx=m.position.x+b.vx*dt,ny=m.position.y+b.vy*dt,nz=m.position.z+b.vz*dt;m.rotation.x+=dt*10;
+    let car=null;for(const v of vehicles){if(v===PLAYER.car||v.wreck)continue;if(Math.hypot(v.x-nx,v.z-nz)<Math.max(1.2,(v.L||4)/2)&&ny<(v.y||0)+1.9){car=v;break;}}
+    const gy=TH(nx,nz);if(car){BOMB.fly.splice(i,1);bombStick(b,nx,Math.max(ny,(car.y||0)+1),nz,car);continue;}
+    if(solidAt(nx,ny,nz)){BOMB.fly.splice(i,1);m.rotation.set(0,Math.atan2(b.vx,b.vz),Math.PI/2);bombStick(b,b.prev.x,b.prev.y,b.prev.z,null);continue;}
+    if(ny<gy+.06){BOMB.fly.splice(i,1);m.rotation.set(0,R(0,6),0);bombStick(b,nx,gy+.06,nz,null);continue;}
+    m.position.set(nx,ny,nz);if(b.t<=0){BOMB.fly.splice(i,1);bombStick(b,nx,Math.max(ny,gy+.06),nz,null);}}}
+function bombTick(dt){bombFlyTick(dt);const blink=Math.floor(GT*2.5)%2===0;
+  for(let i=BOMB.list.length-1;i>=0;i--){const e=BOMB.list[i];e.t+=dt;if(e.car){const v=e.car;if(!vehicles.includes(v)||v.wreck){bombBoom(e,i);continue;}const c=Math.cos(v.h),s=Math.sin(v.h);e.m.position.set(v.x+e.lx*c+e.lz*s,(v.y||0)+e.ly,v.z-e.lx*s+e.lz*c);}
+    e.m.userData.led.visible=blink;}
+  if(BOMB.q.length){BOMB.qT-=dt;if(BOMB.qT<=0){BOMB.qT=.14;const e=BOMB.q.shift();const i=BOMB.list.indexOf(e);if(i>=0)bombBoom(e,i);}}
+  bombBtn();}
+function bombBoom(e,i){BOMB.list.splice(i,1);scene.remove(e.m);const p=e.m.position;const x=p.x,y=p.y,z=p.z;try{rocketBoom(x,y,z);}catch(er){}
+  // a shaped charge against a structure: on top of the rocket-sized blast
+  dbBlast(x,y,z,6.2,560);try{shakeNear({x,z},1);}catch(er){}}
+function bombDetonate(){if(!BOMB.list.length){return false;}for(const e of BOMB.list)if(!BOMB.q.includes(e))BOMB.q.push(e);BOMB.qT=.25;try{const c=AU.ctx;for(let k=0;k<3;k++)tone(1800,c.currentTime+k*.07,.04,'square',.05,AU.sfx);}catch(er){}return true;}
+function bombBtn(){const b=BOMB.btn;if(!b)return;const on=BOMB.list.length>0&&!BOMB.q.length&&started&&!S.dead;if(b.hidden===on)b.hidden=!on;if(on){const t='💥 引爆 '+BOMB.list.length;if(b.textContent!==t)b.textContent=t;}}
+{const _fw=fireWeapon;fireWeapon=function(){const w=WEAPONS[S.wpn];if(w&&w.bomb){if(!canFire()||FIRE.cd>0)return;if(ammoOf(w)<=0){if(!bombDetonate()){toast('冇晒炸彈（黑市有得賣）');}FIRE.cd=.5;return;}S.ammo[w.id]--;FIRE.cd=w.cd;bombThrow();updateWeapon();return;}return _fw.apply(this,arguments);};}
+addEventListener('keydown',e=>{if(e.code!=='KeyB'||e.repeat||!started)return;const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))return;if(bombDetonate())e.preventDefault();});
+/* ---------------------------------------------------------------- 2. shop fronts: glass, signs, and people running out */
+const SHOPX={run:[],quiet:false,shout:['救命呀！','爆炸呀！走呀！','救命！有人炸舖呀！','快啲走呀——！','報警呀！']};
+function shopFaceGeo(f){const n=f.n||[0,0,1];const nx=n[0]!=null?n[0]:n.x,nz=n[2]!=null?n[2]:n.z;const a=f.a,c=f.c;const x=f.x!=null?f.x:(a[0]+c[0])/2,z=f.z!=null?f.z:(a[1]+c[1])/2;const L=f.L||Math.hypot(c[0]-a[0],c[1]-a[1]);
+  const ex=a&&c?(c[0]-a[0])/(L||1):1,ez=a&&c?(c[1]-a[1])/(L||1):0;return {x,z,nx,nz,ex,ez,L};}
+function shopBurst(f,big){if(SHOPX.quiet||f.dbBurst)return;f.dbBurst=true;const G=shopFaceGeo(f);const y=TH(G.x,G.z);const near=Math.hypot(PLAYER.x-G.x,PLAYER.z-G.z)<160;if(!near)return;
+  // glass and the sign
+  for(let i=0;i<(DB.mob?6:14);i++){const s=R(-.45,.45)*G.L;dbChunk(new V3(G.x+G.ex*s+G.nx*.2,y+R(.4,2.6),G.z+G.ez*s+G.nz*.2),new V3(R(.1,.3),R(.1,.4),.02),new V3(G.nx*R(2,6)+R(-1,1),R(.5,3),G.nz*R(2,6)+R(-1,1)),R(4,7));}
+  dbChunk(new V3(G.x+G.nx*.3,y+3.6,G.z+G.nz*.3),new V3(Math.min(4,G.L*.7),.55,.1),new V3(G.nx*1.5,1,G.nz*1.5),R(6,9));
+  try{noiseHit(AU.ctx.currentTime,.25,.35,5200,'highpass',AU.sfx);}catch(e){}
+  // who was inside
+  const occ=rnd()<.75?(1+((rnd()*(DB.mob?2:3))|0)):0;if(SHOPX.run.length>(DB.mob?5:10))return;
+  for(let i=0;i<occ;i++){const side=rnd()<.5?-1:1;const p=mkPerson(LOOK_CIV(),G.x-G.nx*.6+G.ex*R(-1,1),G.z-G.nz*.6+G.ez*R(-1,1));SHOPX.run.push({p,t:-i*.45,ph:0,side,G,spd:R(5,6.4),said:false});}
+  try{hsFear(G.x,G.z,26,true,null);}catch(e){}}
+function shopRunTick(dt){for(let i=SHOPX.run.length-1;i>=0;i--){const r=SHOPX.run[i],p=r.p,G=r.G;r.t+=dt;if(r.t<0){p.g.visible=false;continue;}p.g.visible=true;
+    // out of the door, then along the pavement away from the blast
+    let dx,dz;if(r.t<.9){dx=G.nx;dz=G.nz;}else{const w=Math.sin(r.t*1.3+r.side)*.25;dx=G.ex*r.side+G.nx*(.35+w);dz=G.ez*r.side+G.nz*(.35+w);const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;}
+    const o={x:p.g.position.x+dx*r.spd*dt,z:p.g.position.z+dz*r.spd*dt};const h=pushOut(o,.35,0,.45);if(h){o.x+=h.nz*r.side*4*dt;o.z-=h.nx*r.side*4*dt;}
+    p.g.position.set(o.x,TH(o.x,o.z)+.02,o.z);p.g.rotation.y=Math.atan2(dx,dz);try{animP(p,r.spd,dt);}catch(e){}
+    const wave=Math.sin(r.t*14);p.arms[0].rotation.x=-2.6+wave*.35;p.arms[1].rotation.x=-2.6-wave*.35;
+    if(!r.said&&r.t>.3){r.said=true;const d=Math.hypot(PLAYER.x-o.x,PLAYER.z-o.z);if(d<70&&GT-(SHOPX.sayT||-9)>1.2){SHOPX.sayT=GT;const line=pick(SHOPX.shout);subtitle('舖頭職員',line);try{speak(line,R(1.1,1.5),1.25,false,.9);}catch(e){}}}
+    if(r.t>14||(r.t>5&&camDist(o.x,o.z)>120)){rmPerson(p);SHOPX.run.splice(i,1);}}}
+{const _sh=dbShop;dbShop=function(f,show){const was=!!(f&&f.dbHidden);const r=_sh.apply(this,arguments);try{if(!show&&!was&&f)shopBurst(f);}catch(e){dbErr(e,'shop');}return r;};}
+// a save being loaded (or a ruin restored) is not an explosion
+{const _l=dbLoad;dbLoad=function(){SHOPX.quiet=true;try{return _l.apply(this,arguments);}finally{SHOPX.quiet=false;}};}
+// gunfire and blasts at a shop window break it even when the frame panel behind survives
+{const _h=dbHitAt;dbHitAt=function(pt,dir,amt,power,src){const r=_h.apply(this,arguments);try{if((src==='blast'||amt>=40)&&pt.y<(TH(pt.x,pt.z)+4.5))shopNear(pt.x,pt.z,src==='blast'?3:1.4,amt);}catch(e){}return r;};}
+{const _b=dbBlast;dbBlast=function(x,y,z,r,amt){const res=_b.apply(this,arguments);try{if(y<TH(x,z)+6)shopNear(x,z,r,amt);}catch(e){}return res;};}
+function shopNear(x,z,r,amt){for(const b of queryB(x,z,r+2)){const o=b.dbP?b.dbP.A.o:b;if(!o||!o.shops||!o.shops.length||dbProtected(o))continue;for(const f of o.shops){if(f.dbHidden)continue;const G=shopFaceGeo(f);
+      const d=Math.abs((x-G.x)*G.ex+(z-G.z)*G.ez)-G.L/2,dn=Math.abs((x-G.x)*G.nx+(z-G.z)*G.nz);if(Math.max(0,d)<r&&dn<r+.6){f.hp=(f.hp==null?60:f.hp)-amt;if(f.hp<=0){dbShop(f,false);if(!o.dbA&&!DB.sites.has(o)){try{dbSiteStart(o,'dmg');}catch(e){}}}}}}}
+// a finished repair puts the shop fronts back too
+{const _sf=dbSiteFinish;dbSiteFinish=function(S){const o=S&&S.o;const r=_sf.apply(this,arguments);try{for(const f of (o&&o.shops)||[]){dbShop(f,true);f.dbBurst=false;f.hp=null;}dbFlush();}catch(e){}return r;};}
+/* ---------------------------------------------------------------- frame */
+{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on&&!(typeof MP!=='undefined'&&MP.on))return r;if(!started)return r;try{bombTick(dt);shopRunTick(dt);}catch(e){dbErr(e,'v11d');}return r;};}
+function v11dBoot(){try{const h=PLAYER.p.arms[1];const g=bombMesh();g.position.set(0,-.62,.08);g.visible=false;h.add(g);wpnMeshes.c4=g;}catch(e){}
+  const b=document.createElement('button');b.id='tBoom';b.className='hud panel';b.hidden=true;b.textContent='💥 引爆';document.body.appendChild(b);BOMB.btn=b;
+  b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();bombDetonate();});
+  const st=document.createElement('style');st.textContent=`#tBoom{right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(250px + env(safe-area-inset-bottom,0px));padding:9px 14px;font:inherit;font-weight:900;font-size:15px;color:#fff;background:rgba(200,30,20,.9);border:2px solid #ffb35c;border-radius:14px;pointer-events:auto;cursor:pointer;z-index:7;animation:boomP 1s infinite alternate}
+@keyframes boomP{from{box-shadow:0 0 0 rgba(255,80,40,.0)}to{box-shadow:0 0 18px rgba(255,80,40,.8)}}
+html.mob #tBoom{font-size:13px;padding:7px 11px}html.mob.lan #tBoom{bottom:calc(196px + env(safe-area-inset-bottom,0px));right:calc(14px + env(safe-area-inset-right,0px))}html.mob.por #tBoom{bottom:calc(300px + env(safe-area-inset-bottom,0px));right:calc(14px + env(safe-area-inset-right,0px))}`;document.head.appendChild(st);}
 
 
 
