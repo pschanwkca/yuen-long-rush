@@ -1814,7 +1814,7 @@ function v3GameBoot(){setupSchoolInteracts();setupHomeInteracts();setupBigMap();
   // light rail rides
   INTER.push({at:()=>{const t=lrtNear();return t?{x:PLAYER.x,z:PLAYER.z}:null;},r:9,label:'上輕鐵（$5）',ok:()=>!PLAYER.car&&!PLAYER.riding&&!curRoom&&!PLAYER.ind&&!!lrtNear(),act:()=>{if(S.money<5){toast('唔夠錢搭輕鐵');return;}const t=lrtNear();addMoney(-5,true);sfx('ding');PLAYER.riding='lrt';PLAYER.tram=t;PLAYER.p.g.visible=false;PLAYER.tramStop=t.last;toast('上咗輕鐵，到站撳 E 落車');}});
   INTER.push({at:()=>({x:PLAYER.x,z:PLAYER.z}),r:1,label:'落輕鐵',ok:()=>PLAYER.riding==='lrt'&&PLAYER.tram.wait>0,act:()=>{const t=PLAYER.tram;PLAYER.riding=null;PLAYER.tram=null;PLAYER.p.g.visible=true;const s=Math.sin(t.h),c=Math.cos(t.h);PLAYER.x=t.x+c*3.4;PLAYER.z=t.z-s*3.4;pushOut(PLAYER,.4);PLAYER.y=TH(PLAYER.x,PLAYER.z);toast('落咗輕鐵');}});
-  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,applyOutfit);}
+  BOOTQ.push(v3bBoot,v3cBoot,v3dBoot,v3eBoot,v3fBoot,v3hBoot,v3iBoot,v3jBoot,v3mBoot,v3nBoot,v3oBoot,v3pBoot,v3qBoot,v3rBoot,v3sBoot,v3tBoot,v3uBoot,v3vBoot,v3wBoot,v3xBoot,v3yBoot,v3zBoot,v4aBoot,v4bBoot,v4cBoot,v5aBoot,v6aBoot,v6bBoot,v6cBoot,v7aBoot,v7cBoot,v7dBoot,v7eBoot,v7fBoot,v8aBoot,v8bBoot,v9aBoot,v9dBoot,v9eBoot,v10aBoot,v10bBoot,v10cBoot,v10dBoot,v11aBoot,v11bBoot,applyOutfit);}
 const BOOTQ=[];
 function lrtNear(){for(const t of lrts){if(t.wait>1.2&&Math.hypot(t.x-PLAYER.x,t.z-PLAYER.z)<9)return t;}return null;}
 function v3Update(dt){if(edgeT>0)edgeT-=dt;const P=PLAYER;
@@ -6651,7 +6651,7 @@ const NET_PEER={async host(code,onConn,onLost){await mpPeerLib();return await ne
       peer.on('open',()=>{const conn=peer.connect(MP_PREFIX+code,{reliable:true,serialization:'json'});conn.on('open',()=>{if(done)return;done=true;clearTimeout(t);const L=mpWrapConn(conn);res({link:L,destroy(){L.close();try{peer.destroy();}catch(e){}}});});conn.on('error',fail);});});}};
 function mpNet(){return (window.__MP_BC||MP.kind==='bc')?NET_BC:NET_PEER;}
 // ---------- room lifecycle ----------
-const MP_VER=18;
+const MP_VER=19;
 const mpNow=()=>performance.now()/1000;
 async function mpHost(name){MP.name=name;for(let i=0;i<4;i++){const code=mpCode();try{MP.net=await mpNet().host(code,mpOnConn,mpLostHost);MP.code=code;break;}catch(e){if(e&&e.type==='unavailable-id')continue;throw e;}}
   if(!MP.net)throw new Error('開唔到房，試多次');MP.on=true;MP.host=true;MP.pid=1;MP.hostPid=1;MP.nextPid=2;MP.peers.clear();MP.reco=null;return MP.code;}
@@ -10123,10 +10123,115 @@ function dbTick(dt){dbClock();
   // a repair site on a standing frame: done at the end of the day; a site on a collapsed one runs the whole rebuild
   for(const [o,S] of [...DB.sites]){if(S.kind==='dmg'){const u=(DB.tot-S.t0)/DB_DAY;if(u>.5&&!S.scaf)dbScaffold(o);if(u>=1)dbSiteFinish(S);}else dbSiteTick(S,dt);}
   dbFlush();DB.saveT-=dt;if(DB.saveT<=0){DB.saveT=5;if(DB.dirty||DB.sites.size)dbSave();}}
-{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on)return r;if(!started)return r;try{dbTick(dt);}catch(e){dbErr(e,'tick');}return r;};}
+{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on&&!(typeof MP!=='undefined'&&MP.on))return r;if(!started)return r;try{dbTick(dt);}catch(e){dbErr(e,'tick');}return r;};}
 addEventListener('beforeunload',()=>{try{dbSave();}catch(e){}});
 function v11aBoot(){DB.static=new Set(scene.children);DB.mob=!!(isMobile||(typeof LITE!=='undefined'&&(LITE.mob||LITE.on)));DB.nmod=DB.mob?3:6;DB.cap=DB.mob?80:250;DB.bodyCap=DB.mob?10:28;
   try{dbProtScan();}catch(e){}try{dbLoad();}catch(e){dbErr(e,'boot');}}
+
+/* =====================================================================
+   v22.1 — 拆樓 (2): multiplayer sync, emergency response, 破壞度 HUD, phone tuning
+   1. multiplayer: every local blow to a building goes out in small batches and is replayed on the other
+      machines; the host alone decides when a building comes down and keeps everyone's construction sites in step
+   2. response: a collapse brings fires in the ruin, a fire engine that drives in and puts them out, an ambulance,
+      and a police cordon (警方封鎖線) with officers until the clean-up starts; knocking one down yourself means 3 stars
+   3. 破壞度: a chip that shows how much you have wrecked (level, buildings down, estimated loss), kept between sessions
+   4. phone: fewer flames, crew and chips; the chip count halves on its own when the frame rate drops
+   ===================================================================== */
+const DBX={out:[],sendT:0,snapT:0,remote:false,keyMap:null,resp:[],loss:0,downN:0,lossAll:0,downAll:0,showT:0,fpsAvg:1/60,slow:false,tape:null};
+function dbxKey(k){if(!DBX.keyMap||!DBX.keyMap.size){DBX.keyMap=new Map();for(const o of BL)if(o.dbMat&&o.pts&&!o.nomap)DBX.keyMap.set(DB.key(o),o);}return DBX.keyMap.get(k);}
+const dbxMP=()=>typeof MP!=='undefined'&&MP.on;
+const dbxClient=()=>dbxMP()&&!MP.host;
+const q1=v=>Math.round(v*10)/10;
+/* ---------------------------------------------------------------- 1. multiplayer */
+// local blows are queued and sent ten times a second; replayed blows are marked remote so they never echo back
+{const _h=dbHitAt;dbHitAt=function(pt,dir,amt,power,src){if(!DBX.remote&&dbxMP()&&!(typeof MP!=='undefined'&&MP.replay))DBX.out.push([0,q1(pt.x),q1(pt.y),q1(pt.z),q1(dir.x),q1(dir.z),Math.round(amt),q1(power),src==='gun'?1:src==='melee'?2:src==='blast'?3:4]);return _h.apply(this,arguments);};}
+{const _b=dbBlast;dbBlast=function(x,y,z,r,amt){if(!DBX.remote&&dbxMP()&&!(typeof MP!=='undefined'&&MP.replay))DBX.out.push([1,q1(x),q1(y),q1(z),q1(r),Math.round(amt)]);return _b.apply(this,arguments);};}
+const DBX_SRC=[null,'gun','melee','blast','car'];
+function dbxApply(list){DBX.remote=true;try{for(const e of list){if(e[0]===0)dbHitAt(new V3(e[1],e[2],e[3]),new V3(e[4],0,e[5]),e[6],e[7],DBX_SRC[e[8]]||'gun');else if(e[0]===1)dbBlast(e[1],e[2],e[3],e[4],e[5]);}dbFlush();}catch(err){dbErr(err,'mp apply');}finally{DBX.remote=false;}}
+// who did it: a building remembers the last time this player hit it
+{const _d=dbDamage;dbDamage=function(p,amt){if(!DBX.remote&&p&&p.A)p.A.myT=GT;return _d.apply(this,arguments);};}
+// the host decides collapses; a client waits for the word (its own copy of the frame may be cut differently on a phone)
+{const _o=dbOverload;dbOverload=function(A,dt){if(dbxClient()&&!A.down&&!A.hostDown)return;return _o.apply(this,arguments);};}
+{const _c=dbCollapse;dbCollapse=function(A){if(A.down)return;if(dbxClient()&&!A.hostDown)return;const mine=A.myT!=null&&GT-A.myT<40;DB.noHeat=!mine;let r;try{r=_c.apply(this,arguments);}finally{DB.noHeat=false;}
+  try{if(dbxMP()&&MP.host)mpSend({t:'dbc',k:DB.key(A.o),pid:MP.pid});}catch(e){}dbxAfterCollapse(A.o,mine);return r;};}
+{const _ah=addHeat;addHeat=function(n,force){if(DB.noHeat)return;return _ah.apply(this,arguments);};}
+// a collapse on another machine: wake the frame here and bring it down, or (if it never woke here) go straight to the ruin
+function dbxRemoteDown(k){const o=dbxKey(k);if(!o||DB.sites.has(o)&&DB.sites.get(o).kind==='down')return;
+  try{if(o.dbA&&!o.dbA.down){o.dbA.hostDown=true;dbCollapse(o.dbA);return;}
+    if(dbProtected(o))return;dbMats();if(DB.sites.has(o))dbSiteFinish(DB.sites.get(o));o.dbSoft0=o.soft;o.soft=true;dbHideOrig(o,true,true);
+    const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;for(let i=0;i<10;i++){try{smokePuff(cx+R(-6,6),(o.base||0)+R(1,8),cz+R(-6,6),false,2.4);}catch(e){}}shakeNear({x:cx,z:cz},.6);
+    dbRuin(o,true);dbSiteStart(o,'down');dbFlush();dbxAfterCollapse(o,false);}catch(e){dbErr(e,'mp down');}}
+// the host's list of sites, every few seconds: anything missing here is made, anything finished there is finished here
+function dbxSnap(){const w=[];for(const [o,S] of DB.sites)w.push([DB.key(o),Math.round(DB.tot-S.t0),S.kind==='down'?1:0]);return w;}
+function dbxReconcile(w){const have=new Set();for(const [k,e,down] of w){const o=dbxKey(k);if(!o)continue;have.add(o);let S=DB.sites.get(o);
+    if(down&&(!S||S.kind!=='down')){if(o.dbA&&!o.dbA.down){o.dbA.hostDown=true;dbCollapse(o.dbA);}else dbxRemoteDown(k);S=DB.sites.get(o);}
+    else if(!down&&!S){try{dbSiteStart(o,'dmg',e);}catch(err){dbErr(err,'mp site');}S=DB.sites.get(o);}
+    if(S&&Math.abs((DB.tot-S.t0)-e)>4)S.t0=DB.tot-e;}
+  for(const [o,S] of [...DB.sites])if(!have.has(o)&&DB.tot-S.t0>3)dbSiteFinish(S);}
+{const _rv=mpRecv;mpRecv=function(d,from){if(d&&(d.t==='dbe'||d.t==='dbc'||d.t==='dbw')){if(MP.host)mpRelay(d,from);if(d.pid===MP.pid)return;
+    if(d.t==='dbe')dbxApply(d.e||[]);else if(d.t==='dbc'){if(!MP.host)dbxRemoteDown(d.k);}else if(d.t==='dbw'&&!MP.host)dbxReconcile(d.w||[]);return;}return _rv(d,from);};}
+// a client's world while in someone else's room is borrowed: it is not written over the solo save
+{const _s=dbSave;dbSave=function(){if(dbxClient()){DB.dirty=false;return;}const r=_s.apply(this,arguments);try{localStorage.setItem('ylreal-wreck-st',JSON.stringify({l:Math.round(DBX.lossAll),d:DBX.downAll}));}catch(e){}return r;};}
+function dbxNet(dt){if(!dbxMP()){DBX.out.length=0;return;}DBX.sendT-=dt;if(DBX.sendT<=0&&DBX.out.length){DBX.sendT=.1;mpSend({t:'dbe',pid:MP.pid,e:DBX.out.splice(0,40)});}
+  if(MP.host){DBX.snapT-=dt;if(DBX.snapT<=0){DBX.snapT=6;if(DB.sites.size||DBX.hadSites){DBX.hadSites=DB.sites.size>0;mpSend({t:'dbw',pid:MP.pid,w:dbxSnap()});}}}}
+/* ---------------------------------------------------------------- 2. emergency response */
+function dbxTapeTex(){if(DBX.tape)return DBX.tape;const [c,g]=cvs(512,32);g.fillStyle='#ffd400';g.fillRect(0,0,512,32);g.fillStyle='#111';g.font='900 20px '+FS;g.textBaseline='middle';g.fillText('警方封鎖線 POLICE LINE 不得越過　警方封鎖線 POLICE LINE 不得越過',6,17);
+  const t=ctex(c,true);t.wrapS=THREE.RepeatWrapping;DBX.tape=new THREE.MeshBasicMaterial({map:t,side:THREE.DoubleSide,toneMapped:false});return DBX.tape;}
+function dbxCordon(o){const Q=new DQ();const ccw=o.area>0?1:-1;const p=o.pts;const off=4.2;const posts=[];
+  for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const dx=c[0]-a[0],dz=c[1]-a[1],L=Math.hypot(dx,dz);if(L<.3)continue;const nx=dz/L*ccw,nz=-dx/L*ccw;
+    const pa=[a[0]+nx*off-dx/L*off,a[1]+nz*off-dz/L*off],pc=[c[0]+nx*off+dx/L*off,c[1]+nz*off+dz/L*off];const ll=Math.hypot(pc[0]-pa[0],pc[1]-pa[1]);const ya=TH(pa[0],pa[1])+1.0,yc=TH(pc[0],pc[1])+1.0;
+    Q.quad(new V3(pa[0],ya,pa[1]),new V3(pc[0],yc,pc[1]),new V3(pc[0],yc+.13,pc[1]),new V3(pa[0],ya+.13,pa[1]),new V3(nx,0,nz),[0,0],[ll/9,0],[ll/9,1],[0,1]);posts.push(pa);}
+  const g=new THREE.Group();g.userData.db=1;const m=Q.mesh(dbxTapeTex(),false);scene.remove(m);g.add(m);
+  const pg=new THREE.CylinderGeometry(.05,.07,1.2,6),pm=std('#e8e8e8',.6);for(const q of posts){const s=new THREE.Mesh(pg,pm);s.position.set(q[0],TH(q[0],q[1])+.6,q[1]);g.add(s);}
+  scene.add(g);return g;}
+function dbxAfterCollapse(o,mine){try{if(mine){DBX.downN++;DBX.downAll++;const v=Math.abs(o.area)*o.h*800/1e4;DBX.loss+=v;DBX.lossAll+=v;DBX.showT=12;
+      if(typeof S!=='undefined'&&S.stars<3&&typeof addHeat==='function')addHeat(HEAT_PER*3,true);}}catch(e){}
+  if(DBX.resp.some(r=>r.o===o))return;const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;const base=o.base||0;const n=DB.mob?2:3;const spots=[];
+  for(let i=0;i<n;i++)spots.push({x:R(o.x0,o.x1)*.6+cx*.4,z:R(o.z0,o.z1)*.6+cz*.4,y:base+R(.8,2.2),k:1});
+  DBX.resp.push({o,cx,cz,t:0,spots,state:'burn',acc:0});}
+function dbxCop(x,z,face){const L=COP_LOOK.patrol;const p=mkPerson(Object.assign({shirt:L.shirt,pants:L.pants},L.look||{}),x,z,'差佬','#9cc8ff');try{addCap(p,L.cap);}catch(e){}p.g.rotation.y=face;return p;}
+function dbxRespTick(R0,dt){const o=R0.o;R0.t+=dt;R0.acc+=dt;const vis=camDist(R0.cx,R0.cz)<260;const site=DB.sites.get(o);const u=site?(DB.tot-site.t0)/DB_DAY:1;
+  // fires in the ruin until the hoses get to them
+  const k=R0.state==='burn'?clamp(R0.t/3,0,1):R0.state==='spray'?Math.max(0,1-R0.sprayT/14):0;
+  if(vis&&R0.acc>(DB.mob||DBX.slow?.09:.05)){R0.acc=0;for(const s of R0.spots){if(k>0){flame(s.x,s.y,s.z,.9*k);}if(rnd()<(k>0?.6:.15))smokePuff(s.x,s.y+1.2,s.z,k>0,1.2);}}
+  if(R0.t>9&&!R0.truck&&!R0.noTruck){R0.truck=emsSpawn('fire',R0,R0.cx,R0.cz);if(!R0.truck){R0.noTruck=true;}}
+  if(R0.noTruck&&R0.state==='burn'&&R0.t>60){R0.state='out';R0.outT=0;}
+  if(R0.t>18&&!R0.amb&&!R0.noAmb){R0.amb=emsSpawn('amb',R0,R0.cx+3,R0.cz+3);if(!R0.amb)R0.noAmb=true;}
+  if(R0.amb&&R0.amb.script&&R0.amb.script.arrived&&!R0.ambT){R0.ambT=.001;R0.amb.script.quiet=true;}if(R0.ambT){R0.ambT+=dt;if(R0.ambT>30&&!R0.ambGone){R0.ambGone=true;R0.amb.script.quiet=false;emsLeave(R0.amb);}}
+  if(R0.state==='burn'&&R0.truck&&R0.truck.script&&R0.truck.script.arrived){R0.state='spray';R0.sprayT=0;R0.truck.script.quiet=true;R0.crew=[];const tr=R0.truck;
+    for(const s of DB.mob?[1]:[-1,1]){const p=mkPerson({shirt:'#2b2b2b',pants:'#2b2b2b',hair:'#111'},tr.x+Math.cos(tr.h)*s*2,tr.z-Math.sin(tr.h)*s*2,'消防員','#ffd23f');const hat=new THREE.Mesh(new THREE.SphereGeometry(.19,10,8,0,TAU,0,Math.PI/2),std('#f2c300',.4));hat.position.y=1.72;p.b.add(hat);R0.crew.push(p);}}
+  else if(R0.state==='spray'){R0.sprayT+=dt;const tr=R0.truck;const s=R0.spots[Math.floor(R0.t*1.3)%R0.spots.length];for(const p of R0.crew){p.g.rotation.y=Math.atan2(R0.cx-p.g.position.x,R0.cz-p.g.position.z);p.arms[0].rotation.x=p.arms[1].rotation.x=-1.4;}
+    if(vis){const nz=new THREE.Vector3(0,3.3,-2).applyAxisAngle(new THREE.Vector3(0,1,0),tr.h).add(new THREE.Vector3(tr.x,tr.y,tr.z));for(let i=0;i<(DB.mob?2:3);i++){const tt=R(.7,1.0);emit(PSN,{x:nz.x,y:nz.y,z:nz.z,vx:(s.x-nz.x)/tt+R(-.6,.6),vy:(s.y-nz.y)/tt+11*tt*.5,vz:(s.z-nz.z)/tt+R(-.6,.6),life:tt,s0:.18,s1:.5,r:.75,g:.85,b:1,a:.65,grav:11});}}
+    if(R0.sprayT>16){R0.state='out';R0.outT=0;}}
+  else if(R0.state==='out'){R0.outT=(R0.outT||0)+dt;if(R0.outT>4&&R0.crew){for(const p of R0.crew)rmPerson(p);R0.crew=null;if(R0.truck){R0.truck.script.quiet=false;emsLeave(R0.truck);}}}
+  // the police line goes up while the dust settles and comes down when the crews move in
+  if(!R0.cordon&&R0.t>4&&u<.12){R0.cordon=dbxCordon(o);R0.cops=[];const p=o.pts;const ccw=o.area>0?1:-1;for(let i=0;i<(DB.mob?1:2);i++){const e=p[(i*2)%p.length],c=p[(i*2+1)%p.length];const dx=c[0]-e[0],dz=c[1]-e[1],L=Math.hypot(dx,dz)||1;const nx=dz/L*ccw,nz=-dx/L*ccw;const x=(e[0]+c[0])/2+nx*5.4,z=(e[1]+c[1])/2+nz*5.4;R0.cops.push(dbxCop(x,z,Math.atan2(nx,nz)));}}
+  if(R0.cops)for(const c of R0.cops){c.arms[1].rotation.x=Math.sin(GT*1.7+c.ph)>.8?-2.6:0;}
+  const done=u>=.12||!site;if(done&&R0.cordon){scene.remove(R0.cordon);R0.cordon.traverse(m=>{if(m.geometry)m.geometry.dispose();});R0.cordon=null;for(const c of R0.cops||[])rmPerson(c);R0.cops=null;}
+  if(done&&R0.state==='out'&&!R0.crew&&R0.t>40){if(R0.truck&&EMS.list.includes(R0.truck))emsLeave(R0.truck);if(R0.amb&&EMS.list.includes(R0.amb)&&!R0.ambGone)emsLeave(R0.amb);return true;}
+  return false;}
+// a load or a resumed save has no response team: they only come for a fresh collapse
+/* ---------------------------------------------------------------- 3. 破壞度 chip */
+{const _br=dbBreak;dbBreak=function(p){const was=p&&p.alive;const r=_br.apply(this,arguments);if(was&&!DBX.remote&&p.A&&p.A.myT!=null&&GT-p.A.myT<2){const v=p.kind==='column'?6:p.kind==='slab'?4:p.kind==='panel'?1.2:0;DBX.loss+=v;DBX.lossAll+=v;DBX.showT=Math.max(DBX.showT,8);}return r;};}
+function dbxLevel(l){return l<50?1:l<300?2:l<1500?3:l<6000?4:5;}
+function dbxMoney(w){return w>=1e4?(w/1e4).toFixed(w>=1e5?0:1)+' 億':Math.round(w).toLocaleString('en-US')+' 萬';}
+function dbxHud(dt){const el=DBX.el;if(!el)return;DBX.showT-=dt;const on=DBX.showT>0&&DBX.loss>0&&!(typeof PHONE!=='undefined'&&PHONE.on);
+  if(on){const lv=dbxLevel(DBX.loss);const bar='▮'.repeat(lv)+'▯'.repeat(5-lv);const txt=`🏚 破壞度 ${bar}　倒塌 ${DBX.downN} 座　損失 $${dbxMoney(DBX.loss)}`;if(el.textContent!==txt)el.textContent=txt;el.dataset.lv=lv;}
+  if(el.hidden===on)el.hidden=!on;el.style.opacity=on?String(clamp(DBX.showT/1.2,0,1)):'0';}
+/* ---------------------------------------------------------------- 4. phone & slow-frame tuning */
+{const _ch=dbChips;dbChips=function(pt,dir,n,p){if(DBX.slow&&n>1)n=Math.ceil(n/2);return _ch.call(this,pt,dir,n,p);};}
+{const _fr=dbFracture;dbFracture=function(c,s,ax,pt,dir,power,maxN,dust){if(DBX.slow)maxN=Math.max(2,Math.ceil(maxN/2));return _fr.call(this,c,s,ax,pt,dir,power,maxN,dust);};}
+/* ---------------------------------------------------------------- frame */
+function dbxTick(dt){DBX.fpsAvg+=(dt-DBX.fpsAvg)*.05;DBX.slow=DBX.fpsAvg>1/24;
+  try{dbxNet(dt);}catch(e){dbErr(e,'mp net');}
+  for(let i=DBX.resp.length-1;i>=0;i--){try{if(dbxRespTick(DBX.resp[i],dt))DBX.resp.splice(i,1);}catch(e){dbErr(e,'resp');DBX.resp.splice(i,1);}}
+  dbxHud(dt);}
+{const _u=update;update=function(dt){const r=_u(dt);if(typeof PAUSE!=='undefined'&&PAUSE.on&&!(typeof MP!=='undefined'&&MP.on))return r;if(!started)return r;try{dbxTick(dt);}catch(e){dbErr(e,'dbx');}return r;};}
+function v11bBoot(){try{const J=JSON.parse(localStorage.getItem('ylreal-wreck-st')||'null');if(J){DBX.lossAll=+J.l||0;DBX.downAll=+J.d||0;}}catch(e){}
+  if(!document.getElementById('dbChip'))document.body.insertAdjacentHTML('beforeend','<div id="dbChip" class="hud panel" hidden></div>');DBX.el=document.getElementById('dbChip');
+  const st=document.createElement('style');st.textContent=`#dbChip{left:calc(16px + env(safe-area-inset-left,0px));top:calc(200px + env(safe-area-inset-top,0px));padding:5px 12px;font-size:13px;font-weight:900;white-space:nowrap;color:#ffb35c;transition:opacity .4s;pointer-events:none}
+#dbChip[data-lv="4"],#dbChip[data-lv="5"]{color:#ff6a4d}
+html.mob #dbChip{font-size:10.5px;padding:3px 8px}html.mob.por #dbChip{top:auto;bottom:calc(252px + env(safe-area-inset-bottom,0px))}`;document.head.appendChild(st);}
 
 
 
