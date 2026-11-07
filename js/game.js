@@ -10382,7 +10382,7 @@ function shopRunTick(dt){for(let i=SHOPX.run.length-1;i>=0;i--){const r=SHOPX.ru
 // a save being loaded (or a ruin restored) is not an explosion
 {const _l=dbLoad;dbLoad=function(){SHOPX.quiet=true;try{return _l.apply(this,arguments);}finally{SHOPX.quiet=false;}};}
 // gunfire and blasts at a shop window break it even when the frame panel behind survives
-{const _h=dbHitAt;dbHitAt=function(pt,dir,amt,power,src){const r=_h.apply(this,arguments);try{if((src==='blast'||amt>=40)&&pt.y<(TH(pt.x,pt.z)+4.5))shopNear(pt.x,pt.z,src==='blast'?3:1.4,amt);}catch(e){}return r;};}
+{const _h=dbHitAt;dbHitAt=function(pt,dir,amt,power,src){const r=_h.apply(this,arguments);try{if(pt.y<(TH(pt.x,pt.z)+4.5))shopNear(pt.x,pt.z,src==='blast'?3:1.4,src==='melee'?amt*3:amt);}catch(e){}return r;};}
 {const _b=dbBlast;dbBlast=function(x,y,z,r,amt){const res=_b.apply(this,arguments);try{if(y<TH(x,z)+6)shopNear(x,z,r,amt);}catch(e){}return res;};}
 function shopNear(x,z,r,amt){for(const b of queryB(x,z,r+2)){const o=b.dbP?b.dbP.A.o:b;if(!o||!o.shops||!o.shops.length||dbProtected(o))continue;for(const f of o.shops){if(f.dbHidden)continue;const G=shopFaceGeo(f);
       const d=Math.abs((x-G.x)*G.ex+(z-G.z)*G.ez)-G.L/2,dn=Math.abs((x-G.x)*G.nx+(z-G.z)*G.nz);if(Math.max(0,d)<r&&dn<r+.6){f.hp=(f.hp==null?60:f.hp)-amt;if(f.hp<=0){dbShop(f,false);if(!o.dbA&&!DB.sites.has(o)){try{dbSiteStart(o,'dmg');}catch(e){}}}}}}}
