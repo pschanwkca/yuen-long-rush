@@ -10883,3 +10883,177 @@ function stnTick(){for(let i=STN.hid.length-1;i>=0;i--){const it=STN.hid[i];if((
 {const _u=update;update=function(dt){const r=_u(dt);try{panelTick();if(started){stnTick();}}catch(e){if(!WALK.err){WALK.err=String(e);console.warn(e);}}return r;};}
 function v12cBoot(){setTimeout(()=>{try{walkMap();stnFind();}catch(e){}},2500);}
 {const _ib=introBoot;introBoot=function(){try{v12cBoot();}catch(e){}return _ib.apply(this,arguments);};}
+
+/* =====================================================================
+   v26.0 — 受傷系統 + 元朗大混戰
+   A team match on real streets, built on the arcade's round framework (lobby, teams, bots, buy time, spectating):
+   two teams, first to 3 rounds, a different part of town each round, no bomb — wipe the other side out.
+   Injuries (in this mode):
+   - a leg hit: limp (slower, no running or jumping); both legs: crawl
+   - an arm hit: shaky aim, only one-handed weapons (pistol, knife, throws); both arms: kicks only
+   - a body hit: bleeding until bandaged
+   - a head shot: dead at once (a helmet stops one)
+   - down but not dead: 20 seconds on the ground; a teammate can pick you up; otherwise you bleed out
+   - bandage (stops bleeding, 3 s), first-aid kit (mends the worst limb, 6 s, standing still)
+   ===================================================================== */
+const INJ={on:false,inj:{armL:0,armR:0,legL:0,legR:0},bleed:0,band:0,med:0,helmet:0,down:false,downT:0,head:false,use:null,swayT:0,el:null,saveCS:null,locI:0,lastPart:null};
+const INJ_LOC=[{n:'元朗街市',x:113,z:146},{n:'元朗廣場前',x:-551,z:-7},{n:'明渠',x:-344,z:-314},{n:'大會堂',x:-641,z:258},{n:'形點',x:713,z:85}];
+const INJ_BUY=[['pistol','手槍',0,60],['smg','衝鋒槍',1200,180],['shotgun','散彈槍',1300,32],['sniper','狙擊槍',3500,20],['band','繃帶 ×2',100,0],['med','急救包',400,0],['helmet','頭盔',350,0],['armor','護甲',650,0]];
+const ONE_HAND=new Set(['fist','knife','pistol','molotov','c4','bat','pipe','cleaver']);
+const ylActive=()=>!!(ARC.on&&ARC.M&&ARC.M.yl);
+const ylLegs=()=>INJ.inj.legL+INJ.inj.legR,ylArms=()=>INJ.inj.armL+INJ.inj.armR;
+function ylReset(){if(INJ.down)try{renderer.domElement.style.filter='';}catch(e){}INJ.inj={armL:0,armR:0,legL:0,legR:0};INJ.bleed=0;INJ.down=false;INJ.downT=0;INJ.head=false;INJ.use=null;}
+/* ---------------------------------------------------------------- where each round is fought */
+function ylSetLoc(i){const L=INJ_LOC[i%INJ_LOC.length];INJ.locI=i%INJ_LOC.length;if(!INJ.saveCS)INJ.saveCS=JSON.parse(JSON.stringify({ox:ARC_CS.ox,oz:ARC_CS.oz,W:ARC_CS.W,D:ARC_CS.D,spawn:ARC_CS.spawn}));
+  const c=freeSpot(L.x,L.z);ARC_CS.ox=c.x;ARC_CS.oz=c.z;ARC_CS.W=52;ARC_CS.D=34;const s0=freeSpot(c.x-42,c.z),s1=freeSpot(c.x+42,c.z);ARC_CS.spawn=[[s0.x-c.x,s0.z-c.z],[s1.x-c.x,s1.z-c.z]];
+  try{ARC.nav=arcNavBuild(ARC_CS.ox,ARC_CS.oz,ARC_CS.W,ARC_CS.D);}catch(e){ARC.nav=[];}ylFence();return L;}
+function ylRestoreCS(){if(INJ.saveCS){Object.assign(ARC_CS,INJ.saveCS);INJ.saveCS=null;ARC.nav=null;ARC.built.cs=false;}if(INJ.fence){scene.remove(INJ.fence);INJ.fence=null;}}
+// the edge of the play area: red-and-white posts with a light on top
+function ylFence(){if(INJ.fence){scene.remove(INJ.fence);}const g=new THREE.Group();const {ox,oz,W,D}=ARC_CS;const pm=std('#e8e8e8',.6),rm=std('#d0262f',.6),lm=new THREE.MeshBasicMaterial({color:0xff3030,toneMapped:false});
+  const geo=new THREE.CylinderGeometry(.08,.1,1.6,6),lg=new THREE.SphereGeometry(.12,6,4);const put=(x,z)=>{const y=TH(x,z);const p=new THREE.Mesh(geo,(Math.round(x+z)%2)?pm:rm);p.position.set(x,y+.8,z);g.add(p);const l=new THREE.Mesh(lg,lm);l.position.set(x,y+1.7,z);g.add(l);};
+  for(let x=-W;x<=W;x+=8){put(ox+x,oz-D);put(ox+x,oz+D);}for(let z=-D+8;z<D;z+=8){put(ox-W,oz+z);put(ox+W,oz+z);}scene.add(g);INJ.fence=g;}
+/* ---------------------------------------------------------------- lobby: the new card, teams for it */
+arcPanel=function(){if(ARC.on){toast('打緊機，完咗先');return;}const L=ARC.lobby;const teamG=g=>g==='cs'||g==='yl';
+  const card=(g,t,d,col)=>{const mine=L&&L.g===g;const inL=mine&&arcInLobby();const other=L&&L.g!==g;
+    let body=`<b style="color:${col}">${t}</b><small>${d}</small>`;
+    if(mine){body+=`<div class="aml">${L.mem.map(m=>`<span style="border-color:${teamG(g)?TEAM_C[m.team]:'#7fdc6a'}">${escapeHtml(m.name)}${teamG(g)?'・'+(g==='yl'?['紅隊','藍隊'][m.team]:TEAM_N[m.team]):''}${m.pid===L.owner?' 👑':''}</span>`).join('')}</div>`;}
+    body+='<div class="amb">';if(ARC.M)body+='<button disabled>玩緊一局</button>';
+    else if(!MP.on)body+=`<button data-a="solo" data-g="${g}">開始（同電腦玩）</button>`;
+    else if(other)body+='<button disabled>另一部機開緊房</button>';
+    else if(!mine)body+=`<button data-a="open" data-g="${g}">開房</button>`;
+    else if(!inL)body+=`<button data-a="join" data-g="${g}">加入</button>`;
+    else{if(teamG(g))body+='<button data-a="team">換隊</button>';if(L.owner===arcMe())body+='<button data-a="start" class="go">開始！</button>';else body+='<button disabled>等房主開始</button>';body+='<button data-a="leave">退出</button>';}
+    return `<div class="amc" style="--c:${col}">${body}</div></div>`;};
+  openModal('arcade',`<div class="amw"><h2>🕹 元朗電玩對戰館</h2><p class="amp">${MP.on?'喺房入面開一局，隊友會收到邀請（撳 J 加入）。':'單人模式會同電腦對戰。'}贏咗有錢同經驗，存返自己部機。</p>
+    ${card('yl','⚔️ 元朗大混戰','真實街道・紅隊對藍隊，每局換一個地方，全殲對方就贏一局，先贏 3 局。中槍會受傷：腳中跛腳、手中揸唔到長槍、身中流血、爆頭即死。倒地 20 秒內隊友可以救起。人唔夠由電腦補位。','#ff4a4a')}
+    ${card('cs','💣 反恐對戰','廢棄停車場・攻方埋炸彈、守方拆彈或者全殲對手。先贏 3 局。每局開頭有買嘢時間（B），人唔夠由電腦補位。','#ff8a3a')}
+    ${card('zb','🧟 喪屍生存','工業邨圍場・一波一波喪屍，每 5 波有喪屍大佬。死咗等下一波復活，全隊陣亡就完。','#7fdc6a')}
+    <button id="amClose">關閉</button></div>`);
+  const m=$('#modal');m.classList.add('amm');m.onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.id==='amClose'){m.classList.remove('amm');closeModal();return;}
+    const a=b.dataset.a;if(a==='solo'){m.classList.remove('amm');closeModal();ARC.lobby={g:b.dataset.g,owner:1,mem:[{pid:1,name:'你',team:0}]};arcStart(ARC.lobby);return;}
+    if(a)arcReq(a,{g:b.dataset.g});setTimeout(()=>{if(modal==='arcade')arcPanel();},120);};};
+{const _h=arcHandleReq;arcHandleReq=function(o){const r=_h.apply(this,arguments);const L=ARC.lobby;if(L&&L.g==='yl'&&(o.k==='open'||o.k==='join')){const me=L.mem.find(m=>m.pid===o.pid);if(me&&me.team===0&&o.k!=='team'){const t0=L.mem.filter(m=>m.team===0&&m!==me).length,t1=L.mem.filter(m=>m.team===1).length;if(!me.ylT){me.ylT=1;me.team=t0<=t1?0:1;arcLobbySend();}}}return r;};}
+{const _s=arcStart;arcStart=function(L){if(L&&L.g==='yl'){const mem=L.mem.map(m=>({pid:m.pid,name:m.name,team:m.team}));ARC.lobby=null;const d={t:'ago',g:'cs',yl:1,mem,seed:Math.floor(rnd()*1e6)};if(MP.on){mpSend({t:'alob',L:null});mpSend(d);}arcGo(d);arcHostInit(d);return;}return _s.apply(this,arguments);};}
+{const _l=arcLobbyUi;arcLobbyUi=function(){const r=_l.apply(this,arguments);const el=$('#arcInv');const L=ARC.lobby;if(el&&!el.hidden&&L&&L.g==='yl')el.innerHTML=el.innerHTML.replace(/開咗(反恐對戰|喪屍生存)/,'開咗元朗大混戰');return r;};}
+/* ---------------------------------------------------------------- start / end of a match */
+{const _bc=arcBuildCS;arcBuildCS=function(){if(INJ.pending)return;return _bc.apply(this,arguments);};}
+{const _g=arcGo;arcGo=function(d){if(!d||!d.yl)return _g.apply(this,arguments);INJ.pending=true;TEAM_N[0]='紅隊';TEAM_N[1]='藍隊';const _f=fadeTo;fadeTo=function(t,cb,ms){fadeTo=_f;return _f('⚔️ 元朗大混戰',()=>{cb();INJ.on=true;ylReset();INJ.band=2;INJ.med=1;INJ.helmet=0;ylSetLoc(ARC.M&&ARC.M.loc!=null?ARC.M.loc:0);arcSpawnMe();ylHudShow(true);},ms);};
+  try{_g.apply(this,arguments);}finally{if(fadeTo!==_f)fadeTo=_f;INJ.pending=false;}if(ARC.M)ARC.M.yl=true;};}
+{const _e=arcEnd;arcEnd=function(d){const was=ARC.M&&ARC.M.yl;const r=_e.apply(this,arguments);if(was){INJ.on=false;ylReset();TEAM_N[0]='恐怖分子';TEAM_N[1]='反恐警察';ylRestoreCS();ylHudShow(false);INJ.lastWasYl=true;}return r;};}
+{const _r=arcResult;arcResult=function(r){const x=_r.apply(this,arguments);if(INJ.lastWasYl){INJ.lastWasYl=false;const h=$('#modal h2');if(h)h.textContent=h.textContent.replace('💣 反恐對戰','⚔️ 元朗大混戰');}return x;};}
+{const _c=arcCleanupMe;arcCleanupMe=function(){const r=_c.apply(this,arguments);if(INJ.on){INJ.on=false;ylReset();ylHudShow(false);}return r;};}
+/* ---------------------------------------------------------------- host: rounds, bots, win checks */
+{const _r=arcCsRound;arcCsRound=function(){const M=ARC.M;if(!M||!M.yl)return _r.apply(this,arguments);
+  M.round++;M.ph='buy';M.t=10;M.dead={};M.bomb=null;arcClearEnts();const li=(M.round-1+(M.locOff||(M.locOff=Math.floor(rnd()*INJ_LOC.length))))%INJ_LOC.length;ylSetLoc(li);M.loc=li;
+  const n=[0,0];for(const m of M.mem)n[m.team]++;const size=Math.max(DB.mob?2:3,n[0],n[1]);
+  for(let t=0;t<2;t++)for(let k=n[t];k<size;k++){const e=arcMakeEnt(ARC.nextI++,'bot',t);e.name='電腦・'+ARC_NAMES[t][k%4];e.hp=e.max=100;const [sx,sz]=ARC_CS.spawn[t];const p=freeSpot(ARC_CS.ox+sx+R(-3,3),ARC_CS.oz+sz+(k-1)*2.6);e.x=p.x;e.z=p.z;e.y=TH(e.x,e.z);e.h=t?-Math.PI/2:Math.PI/2;
+    e.wid=M.round>1?pick(['smg','smg','shotgun','pistol']):pick(['pistol','pistol','smg']);ARC.ents.push(e);arcEntTag(e,e.name,TEAM_C[t]);}
+  arcEv({k:'round',n:M.round,sc:M.sc,yl:1,loc:li});};}
+{const _u=arcCsUpdate;arcCsUpdate=function(dt){const M=ARC.M;if(!M||!M.yl)return _u.apply(this,arguments);M.t-=dt;
+  if(M.ph==='buy'){if(M.t<=0){M.ph='live';M.t=150;arcEv({k:'go'});}return;}
+  if(M.ph==='post'){if(M.t<=0){if(M.sc[0]>=3||M.sc[1]>=3)arcFinish({win:M.sc[0]>=3?0:1});else arcCsRound();}return;}
+  for(const e of ARC.ents)if(!e.dead)arcBotUpdate(e,dt,M);
+  const alive=[0,1].map(t=>arcMembersAlive(t).length+ARC.ents.filter(e=>!e.dead&&e.team===t).length);
+  if(alive[0]===0&&alive[1]===0){arcRoundEnd(rnd()<.5?0:1,'同歸於盡');return;}if(alive[0]===0){arcRoundEnd(1,'全殲紅隊');return;}if(alive[1]===0){arcRoundEnd(0,'全殲藍隊');return;}
+  if(M.t<=0){const hp=t=>arcMembersAlive(t).length*100+ARC.ents.filter(e=>!e.dead&&e.team===t).reduce((a,e)=>a+e.hp,0);arcRoundEnd(alive[0]>alive[1]?0:alive[1]>alive[0]?1:hp(0)>=hp(1)?0:1,'時間到・企得多嗰隊贏');}};}
+// a downed player is out of the fight for the win check (and the bots leave them be)
+{const _a=arcMembersAlive;arcMembersAlive=function(team){const L=_a.apply(this,arguments);if(!ARC.M||!ARC.M.yl)return L;return L.filter(p=>p.pid===arcMe()?!INJ.down:!((MP.peers.get(p.pid)||{}).yDn));};}
+{const _b=arcBotUpdate;arcBotUpdate=function(e,dt,M){if(!M||!M.yl)return _b.apply(this,arguments);ylBot(e,dt,M);};}
+function ylBot(e,dt,M){const enemies=[...arcMembersAlive().filter(p=>p.team!==e.team),...ARC.ents.filter(o=>!o.dead&&o.kind==='bot'&&o.team!==e.team)];
+  let tgt=null,td=50;for(const o of enemies){const d=Math.hypot(o.x-e.x,o.z-e.z);if(d>td)continue;if(!losClear(e.x,(e.y||0)+1.5,e.z,o.x,(o.y||0)+1.3,o.z))continue;td=d;tgt=o;}
+  e.sp=0;e.atkT=Math.max(0,e.atkT-dt);e.y=TH(e.x,e.z);
+  if(tgt&&M.ph==='live'){if(e.tgtRef!==tgt){e.tgtRef=tgt;e.react=R(.4,.8);}e.h=Math.atan2(tgt.x-e.x,tgt.z-e.z);e.react-=dt;e.cd-=dt;
+    if(e.react<=0&&e.cd<=0){const [cd,dmg,pel]=arcBotWeapon(e.wid);e.cd=cd*R(.95,1.4);e.atkT=.25;const hitP=clamp(.55-td/80,.12,.5);
+      const o=[e.x+Math.sin(e.h)*.8,e.y+1.45,e.z+Math.cos(e.h)*.8];let hits=0;for(let k=0;k<pel;k++)if(rnd()<hitP*(pel>1?(td<12?1:.35):1))hits++;
+      const ty=(tgt.y||0)+1.2;arcEv({k:'tr',a:[r2(o[0]),r2(o[1]),r2(o[2]),r2(tgt.x+(hits?0:R(-1.5,1.5))),r2(ty+(hits?0:R(-.5,.8))),r2(tgt.z+(hits?0:R(-1.5,1.5)))],w:e.wid});
+      if(hits){const d=dmg*hits*(e.wid==='shotgun'?Math.max(.3,1-td/26):1);if(tgt.human)arcHurt(tgt.pid,d,e.name);else{tgt.hp-=d;if(tgt.hp<=0)arcEntDie(tgt,{name:e.name});}}}
+    if(td>12){const s=Math.sin(M.t*1.7+e.i)*1.6;const o2={x:e.x+Math.cos(e.h)*s*dt,z:e.z-Math.sin(e.h)*s*dt};pushOut(o2,.45);e.x=o2.x;e.z=o2.z;e.sp=1;}return;}
+  e.tgtRef=null;if(M.ph!=='live')return;
+  // no one in sight: head for the nearest enemy (or the middle), keeping inside the fence
+  let gx=ARC_CS.ox,gz=ARC_CS.oz,bd=1e9;for(const o of enemies){const d=Math.hypot(o.x-e.x,o.z-e.z);if(d<bd){bd=d;gx=o.x;gz=o.z;}}
+  if(!e.path.length||Math.hypot((e.goalX||0)-gx,(e.goalZ||0)-gz)>4||(e.repath=(e.repath||0)-dt)<=0){e.path=ARC.nav&&ARC.nav.length?arcPath(e.x,e.z,gx,gz):[{x:gx,z:gz}];e.goalX=gx;e.goalZ=gz;e.repath=3;}
+  const n=e.path[0];if(!n)return;const dx=n.x-e.x,dz=n.z-e.z,d=Math.hypot(dx,dz);if(d<.8){e.path.shift();return;}const sp=4.2;const o={x:e.x+dx/d*sp*dt,z:e.z+dz/d*sp*dt};pushOut(o,.45);
+  e.x=clamp(o.x,ARC_CS.ox-ARC_CS.W+.6,ARC_CS.ox+ARC_CS.W-.6);e.z=clamp(o.z,ARC_CS.oz-ARC_CS.D+.6,ARC_CS.oz+ARC_CS.D-.6);e.h=Math.atan2(dx,dz);e.sp=sp;}
+/* ---------------------------------------------------------------- every machine: round start, buy list */
+{const _ev=arcEvent;arcEvent=function(e,host){const M=ARC.M;if(M&&M.yl&&e.k==='round'){M.round=e.n;M.bomb=null;if(e.loc!=null)M.loc=e.loc;if(!host&&e.loc!=null)ylSetLoc(e.loc);if(!ARC.on)return;arcRoundMe(e);ylReset();INJ.band=Math.max(INJ.band,2);INJ.med=Math.max(INJ.med,1);
+    const L=INJ_LOC[INJ.locI];arcCenter('第 '+e.n+' 局・'+L.n,'買嘢時間（B）・你係'+TEAM_N[ARC.team]+'・全殲對方就贏',3.2);return;}
+  return _ev.apply(this,arguments);};}
+{const _bm=arcBuyMenu;arcBuyMenu=function(){const M=ARC.M;if(!M||!M.yl)return _bm.apply(this,arguments);if(!ARC.on||ARC.dead)return;if(M.ph!=='buy'){toast('買嘢時間過咗');return;}
+  const own=id=>id==='armor'?(S.armor||0)>=100:id==='helmet'?INJ.helmet>0:id==='band'||id==='med'?false:!!S.weapons[id];
+  openModal('buy',`<div class="amw"><h2>🛒 買嘢　<span style="color:#3fd16b">$${ARC.cash}</span></h2><div class="abuy">${INJ_BUY.map(b=>`<button data-b="${b[0]}" ${ARC.cash<b[2]||own(b[0])?'disabled':''}><b>${b[1]}</b><i>${b[2]?'$'+b[2]:'免費'}${own(b[0])?'・已有':b[0]==='band'?'・而家 '+INJ.band:b[0]==='med'?'・而家 '+INJ.med:''}</i></button>`).join('')}</div><button id="abClose">好（B）</button></div>`);
+  const m=$('#modal');m.classList.add('amm');m.onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.id==='abClose'){m.classList.remove('amm');closeModal();return;}if(b.dataset.b)arcBuy(b.dataset.b);};};}
+{const _by=arcBuy;arcBuy=function(id){const M=ARC.M;if(!M||!M.yl)return _by.apply(this,arguments);if(!ARC.on||ARC.dead)return;if(M.ph!=='buy'){toast('買嘢時間過咗');return;}const it=INJ_BUY.find(b=>b[0]===id);if(!it)return;if(ARC.cash<it[2]){toast('唔夠錢（$'+ARC.cash+'）');return;}
+  ARC.cash-=it[2];if(id==='armor')S.armor=100;else if(id==='helmet')INJ.helmet=1;else if(id==='band')INJ.band+=2;else if(id==='med')INJ.med+=1;else{S.weapons[id]=true;S.ammo[id]=Math.max(S.ammo[id]||0,it[3]);S.wpn=Math.max(0,WEAPONS.findIndex(w=>w.id===id));updateWeapon();}sfx('ding',.6);arcBuyMenu();ylHud();};}
+/* ---------------------------------------------------------------- hits: which part, sent with the shot */
+{const _ht=hitTarget;hitTarget=function(t,dmg){if(!ylActive()||!t)return _ht.apply(this,arguments);const part=HIT.part||'torso',gun=HIT.gun,w=HIT.w;
+  if(t.mpPid){const m=ARC.M.mem.find(q=>q.pid===t.mpPid);if(!m||m.team===ARC.team){HIT.part=null;HIT.gun=false;HIT.w=null;HIT.explo=false;return;}HIT.part=null;HIT.gun=false;HIT.w=null;HIT.explo=false;
+    mpSend({t:'hit',from:MP.pid,to:t.mpPid,d:Math.round(dmg),arc:1,yl:1,pt:gun?part:(HIT.explo?'torso':part)});try{hitFx(t.g.position.x,(t.g.position.y||0)+(part==='head'?1.7:1.2),t.g.position.z,'jab');}catch(e){}if(part==='head'&&gun){toast('💥 爆頭！');sfx('ding',.5);}return;}
+  if(t.arcE&&gun&&part==='head'){HIT.part=null;HIT.gun=false;HIT.w=null;arcDamage(t,999,arcMe());toast('💥 爆頭！');return;}
+  return _ht.apply(this,arguments);};}
+{const _rv=mpRecv;mpRecv=function(d,from){if(d&&d.yl&&d.t==='hit'&&d.to===MP.pid){if(ARC.on)ARC.lastBy={pid:d.from};const rp=MP.peers.get(d.from);ylHurt(d.pt||'torso',d.d,d.src||(rp?rp.name:'對手'));return;}
+  if(d&&d.t==='yrev'&&d.to===MP.pid){ylRevived(d.by);return;}
+  return _rv.apply(this,arguments);};}
+// bots and their bullets land on a part too
+{const _ah=arcHurt;arcHurt=function(pid,d,src){if(!ARC.M||!ARC.M.yl)return _ah.apply(this,arguments);const r=rnd();const part=r<.04?'head':r<.55?'torso':r<.65?'armL':r<.75?'armR':r<.875?'legL':'legR';
+  if(pid===arcMe()){if(ARC.on&&!S.dead){ARC.lastBy={name:src};ylHurt(part,d,src);}return;}const L=MP.links.get(pid);if(L)L.send({t:'hit',from:0,to:pid,d:Math.round(d),arc:1,yl:1,pt:part,src});};}
+function ylHurt(part,dmg,by){if(S.dead||!ylActive())return;
+  if(part==='head'){if(INJ.helmet>0){INJ.helmet=0;toast('🪖 頭盔擋咗一槍！');hurtPlayer(Math.round(dmg*.4));ylHud();return;}INJ.head=true;toast('💀 '+by+' 爆咗你頭');S.armor=0;hurtPlayer(9999);return;}
+  let k={torso:1,armL:.6,armR:.6,legL:.65,legR:.65}[part]||1;
+  if(part!=='torso'&&dmg>=8){if(!INJ.inj[part]){INJ.inj[part]=1;toast({armL:'左手',armR:'右手',legL:'左腳',legR:'右腳'}[part]+'中咗槍！');}}
+  if(part==='torso'&&dmg>=10)INJ.bleed=Math.min(3,INJ.bleed+1);
+  INJ.lastPart=part;hurtPlayer(Math.max(1,Math.round(dmg*k)));ylHud();}
+/* ---------------------------------------------------------------- down, picked up, bled out */
+{const _ad=arcDown;arcDown=function(){if(!ylActive()||INJ.head||INJ.down){if(INJ.down){INJ.down=false;}return _ad.apply(this,arguments);}
+  INJ.down=true;INJ.downT=20;S.dead=false;S.hp=1;busy=false;try{aimEnd();}catch(e){}renderer.domElement.style.filter='saturate(.4) brightness(.85)';toast('倒咗地！20 秒內等隊友救你');sfx('hurt');ylHud();};}
+function ylBleedOut(){INJ.down=false;INJ.head=true;S.dead=false;S.hp=1;hurtPlayer(9999);}
+function ylRevived(by){if(!INJ.down)return;INJ.down=false;S.hp=30;renderer.domElement.style.filter='';toast('🩹 '+(by||'隊友')+' 救起咗你！');sfx('gold',.5);const P=PLAYER;P.p.b.rotation.x=0;P.p.b.position.y=0;ylHud();}
+function ylDownedMate(){if(!ylActive()||INJ.down||S.dead)return null;for(const m of ARC.M.mem){if(m.pid===arcMe()||m.team!==ARC.team)continue;const rp=MP.peers.get(m.pid);if(!rp||!rp.yDn)continue;const q=rp.tag.sp.position;if(Math.hypot(q.x-PLAYER.x,q.z-PLAYER.z)<2.2)return rp;}return null;}
+/* ---------------------------------------------------------------- bandage and first-aid kit */
+function ylUse(k){if(!ylActive()||S.dead||INJ.down||INJ.use)return;if(k==='band'){if(INJ.band<=0){toast('冇繃帶');return;}if(!INJ.bleed&&S.hp>=100){toast('冇流血，唔使包');return;}INJ.use={k,t:0,dur:3};}
+  else{if(INJ.med<=0){toast('冇急救包');return;}if(!ylLegs()&&!ylArms()&&S.hp>=100){toast('冇受傷');return;}INJ.use={k,t:0,dur:6,x:PLAYER.x,z:PLAYER.z};}sfx('ding',.3);}
+function ylUseTick(dt){const u=INJ.use;if(!u)return;if(S.dead||INJ.down){INJ.use=null;return;}
+  if(u.k==='med'&&Math.hypot(PLAYER.x-u.x,PLAYER.z-u.z)>.8){INJ.use=null;toast('郁咗，急救中斷');return;}u.t+=dt;
+  if(u.t>=u.dur){INJ.use=null;if(u.k==='band'){INJ.band--;INJ.bleed=0;S.hp=Math.min(100,S.hp+10);toast('🩹 包好咗，冇再流血');}
+    else{INJ.med--;const order=['legL','legR','armR','armL'];const f=order.find(p=>INJ.inj[p]);if(f){INJ.inj[f]=0;toast('💊 '+{armL:'左手',armR:'右手',legL:'左腳',legR:'右腳'}[f]+'醫好咗');}S.hp=Math.min(100,S.hp+40);}sfx('gold',.4);ylHud();}}
+/* ---------------------------------------------------------------- what the injuries do */
+{const _ws=walkStep;walkStep=function(dt){if(!ylActive())return _ws.apply(this,arguments);const P=PLAYER;const L=ylLegs();
+  if(L>0||INJ.down||INJ.use&&INJ.use.k==='med'){inp.run=false;jumpReq=false;}const x0=P.x,z0=P.z;const r=_ws.apply(this,arguments);
+  const f=INJ.down?.22:INJ.use&&INJ.use.k==='med'?0:L>=2?.3:L===1?.6:1;if(f<1){P.x=x0+(P.x-x0)*f;P.z=z0+(P.z-z0)*f;}return r;};}
+{const _cf=canFire;canFire=function(){if(ylActive()&&(INJ.down||INJ.use&&INJ.use.k==='med'))return false;return _cf.apply(this,arguments);};}
+function ylArmsTick(){const A=ylArms();if(!A)return;const w=WEAPONS[S.wpn];if(!w)return;
+  if(A>=2&&w.id!=='fist'){const i=WEAPONS.findIndex(q=>q.id==='fist');if(i>=0){S.wpn=i;updateWeapon();toast('兩隻手都傷咗，只可以用腳');}return;}
+  if(!ONE_HAND.has(w.id)){const i=WEAPONS.findIndex(q=>q.id==='pistol'&&S.weapons.pistol);S.wpn=i>=0?i:Math.max(0,WEAPONS.findIndex(q=>q.id==='fist'));updateWeapon();toast('手傷咗，揸唔到長槍');}}
+// a hurt arm makes the aim drift; the body sways when limping; down means lying on the ground
+{const _pp=playerPose;playerPose=function(dt){_pp(dt);if(!ylActive())return;const P=PLAYER,p=P.p;if(!p||P.car)return;
+  if(INJ.down){p.b.rotation.x=-1.45;p.b.position.y=.22;p.arms[0].rotation.x=-2.6+Math.sin(GT*2)*.3;return;}
+  const L=ylLegs();if(L){const s=Math.sin(GT*7);p.b.rotation.z=(INJ.inj.legL?-1:1)*Math.max(0,s)*.12;p.b.position.y=-Math.abs(s)*.06*L;}
+  if(INJ.inj.armL)p.arms[0].rotation.x=.15;if(INJ.inj.armR&&!AIM.on)p.arms[1].rotation.x=.15;};}
+function ylSway(dt){if(!AIM.on||!ylArms())return;INJ.swayT+=dt;const a=.004*ylArms();cam.yaw+=Math.sin(INJ.swayT*2.3)*a;cam.pitch+=Math.sin(INJ.swayT*3.1+1)*a*.7;}
+/* ---------------------------------------------------------------- what others see: limp, hanging arm, lying down */
+{const _ms=mpMyState;mpMyState=function(){const s=_ms.apply(this,arguments);if(ylActive()){s.yi=(INJ.inj.armL?1:0)|(INJ.inj.armR?2:0)|(INJ.inj.legL?4:0)|(INJ.inj.legR?8:0);s.yd=INJ.down?1:0;}return s;};}
+{const _st=mpState;mpState=function(s){const r=_st.apply(this,arguments);const rp=MP.peers.get(s.pid);if(rp){rp.yInj=s.yi|0;rp.yDn=!!s.yd;}return r;};}
+function ylPeersPose(){if(!ARC.M||!ARC.M.yl)return;for(const rp of MP.peers.values()){const a=rp.av;if(!a||!a.g.visible)continue;
+    if(rp.yDn){a.b.rotation.x=-1.45;a.b.position.y=.22;continue;}const i=rp.yInj|0;if(i&12){const s=Math.sin(GT*7);a.b.rotation.z=(i&4?-1:1)*Math.max(0,s)*.12;}if(i&1)a.arms[0].rotation.x=.15;if(i&2)a.arms[1].rotation.x=.15;}}
+/* ---------------------------------------------------------------- HUD: the body, bleeding, items */
+function ylHudShow(on){if(!INJ.el)return;INJ.el.hidden=!on;if(on)ylHud();}
+function ylHud(){const el=INJ.el;if(!el||el.hidden)return;const c=p=>INJ.inj[p]?'#ff4a4a':'#7fdc6a';const u=INJ.use;
+  const h=`<div class="yb"><svg viewBox="0 0 40 70" width="34" height="58"><circle cx="20" cy="8" r="6" fill="${INJ.helmet?'#ffd23f':'#7fdc6a'}"/><rect x="13" y="16" width="14" height="22" rx="3" fill="${INJ.bleed?'#ff4a4a':'#7fdc6a'}"/><rect x="5" y="17" width="6" height="20" rx="3" fill="${c('armL')}"/><rect x="29" y="17" width="6" height="20" rx="3" fill="${c('armR')}"/><rect x="13" y="40" width="6" height="26" rx="3" fill="${c('legL')}"/><rect x="21" y="40" width="6" height="26" rx="3" fill="${c('legR')}"/></svg>
+    <div class="yt">${INJ.down?'<b style="color:#ff4a4a">倒地 '+Math.ceil(INJ.downT)+'s</b>':INJ.bleed?'<b style="color:#ff4a4a">流血中</b>':'<b>'+Math.max(0,S.hp|0)+'</b>'}${u?`<i><s style="width:${Math.min(100,u.t/u.dur*100)}%"></s></i>`:''}</div></div>
+    <div class="ybt"><button data-y="band">🩹 繃帶 ${INJ.band}</button><button data-y="med">💊 急救 ${INJ.med}</button></div>`;
+  if(el._h!==h){el._h=h;el.innerHTML=h;}}
+/* ---------------------------------------------------------------- frame */
+{const _u=update;update=function(dt){const r=_u(dt);try{ylPeersPose();if(!ylActive())return r;
+    if(INJ.down&&!S.dead){INJ.downT-=dt;if(INJ.downT<=0)ylBleedOut();}
+    if(INJ.bleed&&!INJ.down&&!S.dead){INJ.bleedAcc=(INJ.bleedAcc||0)+dt*1.1*INJ.bleed;if(INJ.bleedAcc>=1){const n=Math.floor(INJ.bleedAcc);INJ.bleedAcc-=n;S.hp-=n;if(S.hp<=0)hurtPlayer(1);}}
+    ylUseTick(dt);ylArmsTick();ylSway(dt);if((INJ.hT=(INJ.hT||0)-dt)<=0){INJ.hT=.25;ylHud();}}catch(e){if(!INJ.err){INJ.err=String(e);console.warn(e);}}return r;};}
+function v13aBoot(){const el=document.createElement('div');el.id='ylHud';el.hidden=true;document.body.appendChild(el);INJ.el=el;
+  el.addEventListener('pointerdown',e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();e.stopPropagation();ylUse(b.dataset.y);});
+  addEventListener('keydown',e=>{if(!started||e.repeat||!ylActive())return;const t=(e.target&&e.target.tagName)||'';if(t==='INPUT'||t==='TEXTAREA')return;if(e.code==='Digit4')ylUse('band');if(e.code==='Digit5')ylUse('med');});
+  INTER.push({at:()=>{const rp=ylDownedMate();if(!rp)return null;const q=rp.tag.sp.position;return {x:q.x,z:q.z,y:q.y-2.3};},r:2.4,label:'🩹 救起隊友',ok:()=>!!ylDownedMate()&&!INJ.use,act:()=>{const rp=ylDownedMate();if(!rp)return;INJ.use={k:'rev',t:0,dur:3,x:PLAYER.x,z:PLAYER.z,pid:rp.pid};}});
+  {const _ut=ylUseTick;ylUseTick=function(dt){const u=INJ.use;if(u&&u.k==='rev'){if(Math.hypot(PLAYER.x-u.x,PLAYER.z-u.z)>.8){INJ.use=null;toast('郁咗，救人中斷');return;}u.t+=dt;if(u.t>=u.dur){INJ.use=null;mpSend({t:'yrev',to:u.pid,by:MP.name});sfx('gold',.4);}return;}return _ut(dt);};}
+  const st=document.createElement('style');st.textContent=`#ylHud{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));top:calc(210px + env(safe-area-inset-top,0px));z-index:7;background:rgba(12,14,20,.82);border-radius:12px;padding:6px 8px;color:#fff;font:800 13px "Noto Sans HK",sans-serif;pointer-events:auto}
+#ylHud .yb{display:flex;gap:8px;align-items:center}#ylHud .yt{display:grid;gap:4px;min-width:62px}#ylHud .yt b{font-size:18px}#ylHud .yt i{display:block;height:6px;background:#333;border-radius:3px;overflow:hidden}#ylHud .yt s{display:block;height:100%;background:#3fd16b}
+#ylHud .ybt{display:flex;gap:6px;margin-top:6px}#ylHud button{font:800 13px "Noto Sans HK",sans-serif;background:#2e3440;color:#fff;border:1px solid #5a6270;border-radius:8px;padding:5px 8px;touch-action:none}
+html.mob #ylHud{top:auto;bottom:calc(140px + env(safe-area-inset-bottom,0px));left:calc(130px + env(safe-area-inset-left,0px));font-size:11px;padding:4px 6px}html.mob #ylHud svg{width:24px;height:42px}html.mob #ylHud button{font-size:12px;padding:6px 8px}
+html.mob.por #ylHud{bottom:calc(240px + env(safe-area-inset-bottom,0px));left:calc(8px + env(safe-area-inset-left,0px))}`;document.head.appendChild(st);}
+{const _ib=introBoot;introBoot=function(){try{v13aBoot();}catch(e){console.warn(e);}return _ib.apply(this,arguments);};}
