@@ -23,6 +23,7 @@ const REGIONS={
   north:{n:'天水圍北・濕地・工業邨',b:[-3000,1500,-3400,-1100],spawn:[-2292,-2180]},
   south:{n:'元朗南・大棠・十八鄉',b:[-3000,1500,1000,3000],spawn:[-400,1500]},
   east:{n:'錦田・八鄉・元朗東',b:[1300,5400,-3400,3000],spawn:[3150,660]}};
+try{const h=JSON.parse(localStorage.getItem('ylreal-here')||'null');if(h&&isFinite(h.x)&&isFinite(h.z)){const hw=h.hw||1500,hd=h.hd||1250;REGIONS.here={n:h.n||'附近一帶',b:[h.x-hw,h.x+hw,h.z-hd,h.z+hd],spawn:null};}}catch(e){}
 // story places that every district keeps (the missions and shops look these buildings up)
 const KEEP=[[-641,258],[-813,220],[-511,-30],[-803,268],[-665,38],[-683,234],[-705,289],[-720,312],[-1094,278],[113,146],[1251,-85],[-2830,1036],[-344,-314],[-736,305],[-732,369],[-776,453],[-499,167],[-844,487],[-467,407],[-605,-7],[-418,-88],[570,-190],[-444,-340],[-1077,279],[-546,-48]];
 const CORE_LV=[null,[-2000,1000,-1300,1200],[-1500,700,-800,1000]];
@@ -11705,3 +11706,97 @@ setTimeout(()=>{try{ROT.W=0;rotApply();}catch(e){}},50);
 {const nx=document.querySelector('#dlg .next');if(nx&&isMobile)nx.textContent='撳畫面任何位置繼續';}
 // moving the stick while someone is talking: remind where to tap
 {let hintT=0;const _u=update;update=function(dt){const r=_u(dt);try{if(isMobile&&started&&dlgQ&&!dlgAsk&&joyId!==null&&performance.now()-hintT>2500){hintT=performance.now();const d=document.getElementById('dlg');if(d){d.animate([{transform:'translateX(-50%) scale(1)'},{transform:'translateX(-50%) scale(1.04)'},{transform:'translateX(-50%) scale(1)'}],{duration:380});}}}catch(e){}return r;};}
+
+/* =====================================================================
+   v27.4 — 地區邊界、揸車、打得爛、選單、地圖、武器輪
+   1. District edge (phones load one district at a time): a visible striped barrier with the next district's name,
+      and a big 「▶ 載入前面」 button; one tap saves, reloads the area around where you are heading and puts you
+      back exactly there (in the same car if you were driving).
+   2. Driving on a phone: the stick only steers; 油 / 煞 do speed.
+   3. Story mode only keeps your home, the police station, 趙中 and the building of the current mission whole.
+   4. Every pop-up: ✕ in the top-right corner and a tap outside closes it; the district menu is compact.
+   5. Big map: opens zoomed out to the whole district, clearer, redraws only when needed.
+   6. Weapon wheel: arrows sit beside the name, nothing covers the stats; 上車 hides while the wheel is open.
+   ===================================================================== */
+const V14={edge:null,wall:null,btn:null,edgeT:0,lastMap:'',mapT:0};
+/* ---------------------------------------------------------------- 1. district edge */
+function v14Next(o){const b=litePick().b;const dx=o.x<=b[0]+2?-1:o.x>=b[1]-2?1:0,dz=o.z<=b[2]+2?-1:o.z>=b[3]-2?1:0;const ax=o.x+dx*120,az=o.z+dz*120;
+  let name='附近一帶';for(const [k,r] of Object.entries(REGIONS)){if(k==='here')continue;if(ax>=r.b[0]&&ax<=r.b[1]&&az>=r.b[2]&&az<=r.b[3]){name=r.n;break;}}if(name===litePick().n)name='前面一帶';return {dx,dz,name};}
+function v14Walls(){if(!LITE.on||V14.wall)return;const b=litePick().b;const [c,g]=cvs(512,128);const gr=g.createLinearGradient(0,0,0,128);gr.addColorStop(0,'rgba(255,201,60,0)');gr.addColorStop(.55,'rgba(255,201,60,.25)');gr.addColorStop(1,'rgba(255,201,60,.6)');g.fillStyle=gr;g.fillRect(0,0,512,128);
+  g.strokeStyle='rgba(30,18,8,.55)';g.lineWidth=18;for(let x=-128;x<640;x+=64){g.beginPath();g.moveTo(x,128);g.lineTo(x+64,64);g.stroke();}g.font='900 34px "Noto Sans HK",sans-serif';g.fillStyle='rgba(255,247,230,.95)';g.textAlign='center';g.fillText('地區邊界・撳 ▶ 載入前面',256,52);
+  const tex=ctex(c,true);const m=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});const grp=new THREE.Group();
+  const mk=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0);const t=tex.clone();t.needsUpdate=true;t.repeat.set(L/40,1);const mm=m.clone();mm.map=t;const p=new THREE.Mesh(new THREE.PlaneGeometry(L,9),mm);p.position.set((x0+x1)/2,TH((x0+x1)/2,(z0+z1)/2)+3.5,(z0+z1)/2);p.rotation.y=Math.atan2(x1-x0,z1-z0)+Math.PI/2;grp.add(p);};
+  mk(b[0],b[2],b[1],b[2]);mk(b[1],b[2],b[1],b[3]);mk(b[1],b[3],b[0],b[3]);mk(b[0],b[3],b[0],b[2]);scene.add(grp);V14.wall=grp;}
+function v14Btn(){if(V14.btn)return V14.btn;const b=document.createElement('button');b.id='edgeGo';b.hidden=true;document.body.appendChild(b);b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();v14Go();});V14.btn=b;return b;}
+function v14Go(){if(!V14.edge)return;if(typeof MP!=='undefined'&&MP.on){toast('多人模式入面轉唔到區');return;}const o=PLAYER.car||PLAYER;const n=V14.edge;const b=litePick().b;
+  const hw=Math.min(1500,(b[1]-b[0])/2),hd=Math.min(1250,(b[3]-b[2])/2);const cx=o.x+n.dx*hw*.62,cz=o.z+n.dz*hd*.62;
+  try{localStorage.setItem('ylreal-here',JSON.stringify({x:Math.round(cx),z:Math.round(cz),hw:Math.round(hw),hd:Math.round(hd),n:n.name}));
+    const v=PLAYER.car;sessionStorage.setItem('ylreal-resume',JSON.stringify({mode:S.free?'free':(S.m>0?'cont':'new'),x:o.x,z:o.z,h:v?v.h:PLAYER.h,car:v?{type:v.type,color:v.color||'#c8102e'}:null}));}catch(e){}
+  fadeTo('載入緊「'+n.name+'」……',()=>{},1200);setTimeout(()=>liteReload('lite','here'),350);}
+{const _ec=edgeClamp;edgeClamp=function(o,isCar){const hit=_ec.apply(this,arguments);try{if(hit&&LITE.on&&(o===PLAYER||o===PLAYER.car)){V14.edge=v14Next(o);V14.edgeT=6;}}catch(e){}return hit;};}
+function v14EdgeTick(dt){if(!LITE.on||!started)return;const btn=v14Btn();if(V14.edgeT>0){V14.edgeT-=dt;const o=PLAYER.car||PLAYER;const b=litePick().b;const near=Math.min(o.x-b[0],b[1]-o.x,o.z-b[2],b[3]-o.z)<40;if(!near)V14.edgeT=0;}
+  const on=V14.edgeT>0&&!modal&&!mapOpen&&!(typeof MP!=='undefined'&&MP.on);if(btn.hidden===on){btn.hidden=!on;if(on)btn.innerHTML=`<b>▶ 載入前面</b><span>「${V14.edge.name}」</span>`;}}
+// back in the world after the reload: start straight away and put you where you were
+function v14Resume(){let r=null;try{r=JSON.parse(sessionStorage.getItem('ylreal-resume')||'null');sessionStorage.removeItem('ylreal-resume');}catch(e){}if(!r)return false;
+  setTimeout(()=>{try{if(COV.el){COV.on=false;COV.el.remove();COV.el=null;}document.documentElement.classList.remove('covOn');startGame(r.mode);}catch(e){console.warn(e);return;}
+    setTimeout(()=>{try{const P=PLAYER;if(P.car){P.car=null;}P.x=r.x;P.z=r.z;pushOut(P,.5);P.y=groundAt(P.x,P.z,2);P.h=r.h||0;cam.tx=P.x;cam.tz=P.z;cam.yaw=P.h+Math.PI;
+      if(r.car){const v=spawnVehicle(r.car.type||'car',r.car.color,r.x,r.z,r.h||0,{ai:false});v.color=r.car.color;P.x=r.x+Math.cos(r.h||0)*1.8;P.z=r.z-Math.sin(r.h||0)*1.8;setTimeout(()=>{try{act();}catch(e){}},150);}
+      toast('你喺「'+(litePick().n||'附近一帶')+'」');}catch(e){console.warn(e);}},900);},400);return true;}
+/* ---------------------------------------------------------------- 2. the stick only steers in a car */
+{const _ri=readInput;readInput=function(){_ri();if(isMobile&&PLAYER.car&&joyId!==null){inp.y=(GTA.gas||GTA.brake)?(GTA.brake?-1:1):0;}};}
+/* ---------------------------------------------------------------- 3. what story mode keeps whole */
+{const _dp=dbProtected;dbProtected=function(o){if(!o||!o.pts)return true;if(o.noDb||o.flag||o.nomap)return true;
+    try{if(typeof POL!=='undefined'&&POL.b===o)return true;if(typeof HOMEP!=='undefined'&&inPoly((HOMEP.x0+HOMEP.x1)/2,(HOMEP.z0+HOMEP.z1)/2,o.pts))return true;}catch(e){}
+    if(dbSchoolLock()){const cx=(o.x0+o.x1)/2,cz=(o.z0+o.z1)/2;try{if(o.t===4&&LOC.sch&&Math.hypot(cx-LOC.sch.x,cz-LOC.sch.z)<220)return true;}catch(e){}
+      try{const t=target();if(t&&(inPoly(t.x,t.z,o.pts)||dbNearPoly(o.pts,t.x,t.z,10)))return true;}catch(e){}}
+    return false;};}
+/* ---------------------------------------------------------------- 4. pop-ups close with ✕ or a tap outside */
+const V14_CLOSE=new Set(['arcade','arcres','buy','char','moves','pause','phone','region','settings','shop','skills','build']);
+function v14CloseModal(){const m=document.getElementById('modal');if(!m||m.hidden)return;const btns=[...m.querySelectorAll('button')].filter(b=>!b.classList.contains('mdX'));
+  const pick=btns.find(b=>/Close$|close$/.test(b.id||''))||btns.find(b=>b.dataset&&b.dataset.close!=null)||btns.find(b=>/^(關閉|返回|好|完成|繼續遊戲|繼續|唔買住|走|好（B）)/.test((b.textContent||'').trim()));
+  if(pick){pick.click();if(!m.hidden&&modal){m.classList.remove('amm');closeModal();}}else{m.classList.remove('amm');closeModal();}}
+{const _om=openModal;openModal=function(kind,html){const r=_om.apply(this,arguments);try{const m=document.getElementById('modal');if(V14_CLOSE.has(kind)&&!m.querySelector('.mdX')){const x=document.createElement('button');x.className='mdX';x.setAttribute('aria-label','關閉');x.textContent='✕';m.prepend(x);x.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();v14CloseModal();});}
+    document.documentElement.classList.toggle('mdOn',V14_CLOSE.has(kind));}catch(e){}return r;};}
+{const _cm=closeModal;closeModal=function(){const r=_cm.apply(this,arguments);document.documentElement.classList.remove('mdOn');return r;};}
+function v14Backdrop(){const d=document.createElement('div');d.id='mdBack';document.body.appendChild(d);d.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();v14CloseModal();});
+  // the title screen panels too
+  const ip=document.getElementById('iPanel');if(ip){new MutationObserver(()=>{if(!ip.hidden&&!ip.querySelector('.mdX')){const x=document.createElement('button');x.className='mdX';x.textContent='✕';ip.prepend(x);x.onclick=()=>{const bk=document.getElementById('iBack');if(bk)bk.click();};}}).observe(ip,{attributes:true,childList:true});}}
+/* ---------------------------------------------------------------- 5. big map */
+{const _tm=toggleMap;toggleMap=function(){const r=_tm.apply(this,arguments);try{if(mapOpen){let b=[WB.x0,WB.x1,WB.z0,WB.z1];if(LITE.on){const q=litePick().b;b=[Math.max(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[2]),Math.min(b[3],q[3])];}
+      const z=Math.min(innerWidth/(b[1]-b[0]),innerHeight/(b[3]-b[2]))/.55*.95;BM.zoom=clamp(z,.12,3);const o=PLAYER.car||PLAYER;BM.cx=clamp(o.x,b[0]+innerWidth/(2*.55*BM.zoom)*.6,b[1]-innerWidth/(2*.55*BM.zoom)*.6);BM.cz=clamp(o.z,b[2],b[3]);
+      if(!isFinite(BM.cx))BM.cx=o.x;if(!isFinite(BM.cz))BM.cz=o.z;V14.lastMap='';drawBigMap();}}catch(e){}return r;};}
+{const _db=drawBigMap;drawBigMap=function(){const key=BM.cx.toFixed(1)+'|'+BM.cz.toFixed(1)+'|'+BM.zoom.toFixed(3)+'|'+innerWidth+'x'+innerHeight;const now=performance.now();
+    if(key===V14.lastMap&&now-V14.mapT<300)return;V14.lastMap=key;V14.mapT=now;
+    const dpr0=Object.getOwnPropertyDescriptor(window,'devicePixelRatio');let patched=false;if(isMobile){try{Object.defineProperty(window,'devicePixelRatio',{configurable:true,get:()=>1.25});patched=true;}catch(e){}}
+    try{_db.apply(this,arguments);}finally{if(patched){try{if(dpr0)Object.defineProperty(window,'devicePixelRatio',dpr0);else delete window.devicePixelRatio;}catch(e){}}}
+    try{v14MapOverlay();}catch(e){}};}
+// lighter base, readable names at every zoom
+function v14MapOverlay(){const c=document.getElementById('bigmapc');if(!c)return;const g=c.getContext('2d');g.save();g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='screen';g.fillStyle='rgba(60,52,40,.42)';g.fillRect(0,0,c.width,c.height);g.restore();
+  const dpr=c.width/innerWidth;const sc=BM.zoom*dpr*.55;const W=c.width,H=c.height;const toS=(x,z)=>[W/2+(x-BM.cx)*sc,H/2+(z-BM.cz)*sc];if(BM.zoom>.55)return;
+  g.save();g.setTransform(1,0,0,1,0,0);g.textAlign='center';g.textBaseline='middle';g.font=`900 ${Math.round(12*dpr)}px ${FS}`;const boxes=[];
+  for(const L of LABELS){if(L.el.classList.contains('home'))continue;const [sx,sy]=toS(L.x,L.z);if(sx<0||sx>W||sy<0||sy>H)continue;const w=g.measureText(L.name).width+12*dpr,h=18*dpr;if(boxes.some(b=>Math.abs(b[0]-sx)<(b[2]+w)/2&&Math.abs(b[1]-sy)<(b[3]+h)/2))continue;boxes.push([sx,sy,w,h]);
+    g.fillStyle='rgba(46,30,18,.82)';g.beginPath();g.roundRect?g.roundRect(sx-w/2,sy-h/2,w,h,6*dpr):g.rect(sx-w/2,sy-h/2,w,h);g.fill();g.fillStyle='#fff7e6';g.fillText(L.name,sx,sy+1);}
+  const o=PLAYER.car||PLAYER;const [px,py]=toS(o.x,o.z);g.strokeStyle='#ffc93c';g.lineWidth=3*dpr;g.beginPath();g.arc(px,py,16*dpr,0,TAU);g.stroke();g.restore();}
+/* ---------------------------------------------------------------- 6. weapon wheel centre */
+{const _wr=wheelRender;wheelRender=function(){const r=_wr.apply(this,arguments);try{if(WHEEL.src!=='tap')return r;const svg=WHEEL.el.querySelector('svg');if(!svg)return r;svg.querySelectorAll('text.arr,text.use').forEach(t=>t.remove());
+    const C=210;const hv=WHEEL.hov>=0?CATS[WHEEL.hov]:null;const L=hv?catList(hv[0]):[];if(L.length>1)svg.insertAdjacentHTML('beforeend',`<text class="arr2" x="${C-58}" y="${C-28}">◀</text><text class="arr2" x="${C+58}" y="${C-28}">▶</text>`);}catch(e){}return r;};}
+/* ---------------------------------------------------------------- styles */
+{const st=document.createElement('style');st.textContent=`
+#edgeGo{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:8;display:grid;gap:3px;justify-items:center;background:#ffc93c;color:#3b2410;border:2px solid #3b2410;border-radius:14px;padding:10px 22px;font-family:"Noto Sans HK",sans-serif;box-shadow:0 4px 0 #3b2410,0 10px 30px rgba(0,0,0,.4);cursor:pointer;animation:egPulse 1.4s ease-in-out infinite}
+#edgeGo b{font:900 18px/1 "Noto Sans HK",sans-serif;letter-spacing:.1em}#edgeGo span{font:800 12px/1 "Noto Sans HK",sans-serif}@keyframes egPulse{50%{transform:translateX(-50%) scale(1.05)}}
+#mdBack{position:fixed;inset:0;z-index:11;background:rgba(10,6,3,.35);display:none}html.mdOn #mdBack{display:block}
+#modal .mdX,#iPanel .mdX{position:sticky;top:0;float:right;margin:-4px -6px 4px 8px;z-index:3;width:38px;height:38px;border-radius:50%;background:rgba(46,30,18,.92);color:#fff7e6;border:1.5px solid rgba(255,201,60,.45);font:900 18px/1 "Noto Sans HK",sans-serif;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+#modal .rgl{display:grid!important;grid-template-columns:1fr 1fr;gap:6px}#modal .rgl button{padding:8px 10px!important;min-height:0!important;font-size:13px!important}#modal .rgl button b{font-size:14px}#modal .rgl button i{display:block;font-size:10px}
+#modal .rgm{display:flex;gap:6px;flex-wrap:wrap}#modal .rgm button{padding:6px 10px!important;font-size:12px!important}#modal .amp{font-size:12px!important;margin:4px 0!important}#modal h2{margin:0 0 6px!important}
+html.mob #modal.amm{max-height:calc(var(--vh,1vh)*100 - 20px);overflow:auto}
+#wwheel text.arr2{font-size:22px;fill:#ffc93c}
+html.wheelOn #touch #tAct{display:none!important}
+html.mob #touch #tReload{right:calc(172px + env(safe-area-inset-right,0px))!important;bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}`;document.head.appendChild(st);}
+/* ---------------------------------------------------------------- frame + boot */
+{const _u=update;update=function(dt){const r=_u(dt);try{document.documentElement.classList.toggle('wheelOn',!!WHEEL.open);v14EdgeTick(dt);}catch(e){if(!V14.err){V14.err=String(e);console.warn(e);}}return r;};}
+{const _ib=introBoot;introBoot=function(){const r=_ib.apply(this,arguments);try{v14Backdrop();v14Walls();v14Resume();}catch(e){console.warn('v14',e);}return r;};}
+{const _t=toast;toast=function(m){if(typeof m==='string'&&m.includes('撳大地圖嘅「分區」'))m=m.replace(/撳大地圖嘅「分區」轉去第二區/,'撳上面「▶ 載入前面」繼續行');return _t.apply(this,[m,...[].slice.call(arguments,1)]);};}
+// map legend folds away on phones (button beside 分區)
+{const st=document.createElement('style');st.textContent=`html.mob #legend{display:none!important}html.mob.lgOn #legend{display:grid!important}#lgBtn{position:fixed;z-index:31;top:calc(14px + env(safe-area-inset-top,0px));right:calc(110px + env(safe-area-inset-right,0px));font:800 13px "Noto Sans HK",sans-serif;background:rgba(46,30,18,.9);color:#fff7e6;border:1.5px solid rgba(255,201,60,.5);border-radius:10px;padding:6px 12px}html:not(.mob) #lgBtn{display:none}`;document.head.appendChild(st);
+  const b=document.createElement('button');b.id='lgBtn';b.textContent='圖例';b.hidden=true;document.body.appendChild(b);b.onclick=()=>document.documentElement.classList.toggle('lgOn');
+  const _tm=toggleMap;toggleMap=function(){const r=_tm.apply(this,arguments);b.hidden=!mapOpen;if(!mapOpen)document.documentElement.classList.remove('lgOn');return r;};}

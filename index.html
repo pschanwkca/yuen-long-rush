@@ -2,14 +2,14 @@
 <html lang="zh-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="元朗狂飆"><meta name="theme-color" content="#ffc93c"></head><body>
 <div id="preCover" aria-hidden="true"><div class="pc-in"><div class="pc-tag"><b>元朗</b><span>香港・新界</span></div><div class="pc-t">元朗<em>狂飆</em></div><div class="pc-en">YUEN LONG RUSH</div><div class="pc-bar"><i></i></div><div class="pc-s">載入緊元朗……</div></div></div>
 <style>
-#preCover{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:80;background:linear-gradient(180deg,#24170d 0%,#4a2c16 45%,#a4652a 80%,#e0a04a 100%);color:#fff7e6;font-family:"Noto Sans HK","Noto Sans CJK TC",system-ui,sans-serif;display:grid;place-items:center;overflow:hidden;transition:opacity .4s}
+#preCover{position:fixed;left:0;top:0;width:calc(var(--vw,1vw)*100);height:calc(var(--vh,1vh)*100);z-index:80;background:linear-gradient(180deg,#24170d 0%,#4a2c16 45%,#a4652a 80%,#e0a04a 100%);color:#fff7e6;font-family:"Noto Sans HK","Noto Sans CJK TC",system-ui,sans-serif;display:grid;place-items:center;overflow:hidden;transition:opacity .4s}
 #preCover .pc-in{display:grid;justify-items:center;gap:10px}
 #preCover .pc-tag{display:flex;border-radius:10px;overflow:hidden;border:1.5px solid rgba(255,201,60,.3)}#preCover .pc-tag b{background:#fff7e6;color:#3b2410;font:900 16px/1 "Noto Serif HK",serif;padding:6px 9px}#preCover .pc-tag span{background:rgba(46,30,18,.82);font:800 13px/1 "Noto Sans HK",sans-serif;padding:7px 12px;letter-spacing:.2em}
 #preCover .pc-t{font:900 clamp(48px,12vmin,120px)/1 "Noto Serif HK","Noto Serif CJK TC",serif;letter-spacing:.06em;text-shadow:0 .04em 0 #3b2410,0 .08em .02em rgba(0,0,0,.55)}#preCover .pc-t em{font-style:normal;color:#ffc93c}
 #preCover .pc-en{color:#e2cfae;font:800 12px/1 "Noto Sans HK",sans-serif;letter-spacing:.6em;margin-top:4px}
 #preCover .pc-bar{width:min(46vmax,360px);height:10px;border-radius:5px;background:rgba(255,247,230,.14);border:1px solid rgba(255,201,60,.3);overflow:hidden;margin-top:18px}#preCover .pc-bar i{display:block;height:100%;width:6%;background:linear-gradient(90deg,#ffc93c,#ff8a3c);transition:width .3s}
 #preCover .pc-s{font:700 13px/1 "Noto Sans HK",sans-serif;opacity:.85}
-@media (orientation:portrait) and (pointer:coarse){#preCover{width:100vh;height:100vw;transform-origin:0 0;transform:translate(100vw,0) rotate(90deg)}}
+@media (orientation:portrait) and (pointer:coarse){#preCover{width:calc(var(--vh,1vh)*100);height:calc(var(--vw,1vw)*100);transform-origin:0 0;transform:translate(calc(var(--vw,1vw)*100),0) rotate(90deg)}}
 </style>
 <script>(function(){var t=setInterval(function(){var p=document.getElementById('preCover');if(!p){clearInterval(t);return;}var b=document.querySelector('#bootL .bar i'),s=document.querySelector('#bootL .bs');var i=p.querySelector('.pc-bar i'),q=p.querySelector('.pc-s');if(b&&b.style.width)i.style.width=b.style.width;if(s&&s.textContent)q.textContent=s.textContent;},250);})();</script>
 
@@ -332,7 +332,7 @@ html.mob #loadRunT{font-size:11px;padding:2px 9px}
     <button id="bHow">操作說明</button>
     <button id="bCred">製作人員</button>
   </nav>
-  <div class="ver"><i style="background:#ff7eb6"></i><i style="background:#c8102e"></i><i style="background:#2e86de"></i><i style="background:#ffd23f"></i><span>v27.3・iPhone修正</span></div>
+  <div class="ver"><i style="background:#ff7eb6"></i><i style="background:#c8102e"></i><i style="background:#2e86de"></i><i style="background:#ffd23f"></i><span>v27.4・地區邊界同選單</span></div>
   <div class="studio"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="22" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M14 20 l6 -10 l6 10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="15.5" cy="24" r="2" fill="currentColor"/><circle cx="24.5" cy="24" r="2" fill="currentColor"/></svg><span>Jason ✕ Claude</span></div>
   <div id="iPanel" hidden></div>
 </div>
@@ -376,7 +376,7 @@ var L=window.__YLLITE=(()=>{let force=null,reg='core';try{force=localStorage.get
   const on=force==='full'?false:force==='lite'?true:(mob||crashed||lvl>0);return {on,mob,crashed,reg,force,lvl};})();
 var REG=["core", "west", "north", "south", "east"];var reg=REG.indexOf(L.reg)>=0?L.reg:'core';
 var key=!L.on?'full':(reg==='core'&&L.lvl>0?'core'+Math.min(2,L.lvl):reg);
-var V='27.3',bs=function(t){var e=document.querySelector('#bootL .bs');if(e)e.textContent=t;},bar=function(p){var b=document.querySelector('#bootL .bar i');if(b){b.style.transition='width .3s';b.style.width=Math.max(4,Math.round(p*100))+'%';}};
+var V='27.4',bs=function(t){var e=document.querySelector('#bootL .bs');if(e)e.textContent=t;},bar=function(p){var b=document.querySelector('#bootL .bar i');if(b){b.style.transition='width .3s';b.style.width=Math.max(4,Math.round(p*100))+'%';}};
 if(L.mob){var h=document.createElement('div');h.id='webHint';h.style.cssText='margin:12px auto 0;font:700 13px/1.5 -apple-system,"Noto Sans HK",sans-serif;color:#2a1a0a;background:rgba(255,250,236,.92);border:2px solid #2a1a0a;border-radius:12px;padding:8px 12px;max-width:300px;text-align:center';
   h.innerHTML=(L.lvl>0?'<b style="color:#c8102e">上次部機中途閂咗個網頁，今次自動用更慳記憶體嘅設定</b><br>':'')+'一直開唔到？喺 WhatsApp／IG 入面開嘅話，撳「⋯」揀「用 Safari 開」';var bl=document.getElementById('bootL');if(bl)bl.appendChild(h);}
 var got=0;
