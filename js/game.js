@@ -11678,3 +11678,30 @@ function v13gBoot(){if(!isMobile)return;try{gtaWpnBind();gtaJoyBind();gtaPedals(
     WHEEL.el&&WHEEL.el.addEventListener('pointerup',e=>{if(WHEEL.src==='tap'){e.stopPropagation();}},true);
     if(PERF.mob&&PERF.base){PERF.base=gtaResBase();perfApplyRes();}}catch(e){console.warn('v13g',e);}}
 {const _ib=introBoot;introBoot=function(){const r=_ib.apply(this,arguments);try{v13gBoot();}catch(e){}return r;};}
+
+/* =====================================================================
+   v27.3 — iPhone 打側顯示修正、開機畫面、對話撳畫面繼續
+   - The turned page now measures the real screen (a fixed probe, the native viewport, and the full screen size
+     when started from the home screen), so it fills the whole phone instead of leaving a dark strip.
+   - The first screen while the game loads is the new cover (static, before any script runs), not the old orange one.
+   - During a conversation a tap anywhere on the picture (or on the stick) goes to the next line.
+   ===================================================================== */
+{const pr=document.getElementById('preCover');if(pr){pr.style.opacity='0';setTimeout(()=>pr.remove(),450);}}
+{const pW=Object.getOwnPropertyDescriptor(Window.prototype,'innerWidth'),pH=Object.getOwnPropertyDescriptor(Window.prototype,'innerHeight');
+  const probe=()=>{let el=document.getElementById('rotSize');if(!el){el=document.createElement('div');el.id='rotSize';el.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;visibility:hidden;pointer-events:none;z-index:-1';document.documentElement.appendChild(el);}return [el.offsetWidth,el.offsetHeight];};
+  const stand=()=>{try{return !!(navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches);}catch(e){return false;}};
+  const nat=(d)=>{try{return d&&d.get?d.get.call(window):0;}catch(e){return 0;}};
+  const dims=()=>{const [a,b]=probe();const w=Math.max(a,nat(pW),document.documentElement.clientWidth||0),h=Math.max(b,nat(pH),document.documentElement.clientHeight||0);
+    const sw=Math.min(screen.width,screen.height),sh=Math.max(screen.width,screen.height);let W=w,H=h;
+    if(H>W){W=Math.min(W,sw)||W;if(stand()){W=Math.max(W,sw);H=Math.max(H,sh);}}return [Math.round(W),Math.round(H)];};
+  ROT.realW=()=>dims()[0];ROT.realH=()=>dims()[1];ROT.dims=dims;}
+// a debug readout when the address ends with #dbg
+if(/dbg/.test(location.hash)){const d=document.createElement('div');d.style.cssText='position:fixed;left:0;top:0;z-index:99;background:rgba(0,0,0,.7);color:#0f0;font:11px monospace;padding:4px;pointer-events:none';document.documentElement.appendChild(d);
+  setInterval(()=>{let pw=0,ph=0;try{const e=document.getElementById('rotSize');pw=e.offsetWidth;ph=e.offsetHeight;}catch(_){}d.textContent=`rot ${ROT.on} W${ROT.W} H${ROT.H} T${ROT.T} B${ROT.B} rw${ROT.rw} rh${ROT.rh} probe ${pw}x${ph} screen ${screen.width}x${screen.height} dpr ${devicePixelRatio} pr ${renderer.getPixelRatio().toFixed(2)}`;},500);}
+setTimeout(()=>{try{ROT.W=0;rotApply();}catch(e){}},50);
+/* ---------------------------------------------------------------- tap anywhere to go on with a conversation */
+{let last=0;document.addEventListener('pointerdown',e=>{if(!isMobile||!started||!dlgQ||dlgAsk||modal)return;const t=e.target;if(!t||t.closest('#dlg')||t.closest('button')&&!t.closest('#joy'))return;
+    if(!(t.id==='gl'||t.id==='joyZone'||t.closest('#joy')||t.id==='touch'))return;const now=performance.now();if(now-last<220)return;last=now;e.preventDefault();e.stopPropagation();nextLine();},true);}
+{const nx=document.querySelector('#dlg .next');if(nx&&isMobile)nx.textContent='撳畫面任何位置繼續';}
+// moving the stick while someone is talking: remind where to tap
+{let hintT=0;const _u=update;update=function(dt){const r=_u(dt);try{if(isMobile&&started&&dlgQ&&!dlgAsk&&joyId!==null&&performance.now()-hintT>2500){hintT=performance.now();const d=document.getElementById('dlg');if(d){d.animate([{transform:'translateX(-50%) scale(1)'},{transform:'translateX(-50%) scale(1.04)'},{transform:'translateX(-50%) scale(1)'}],{duration:380});}}}catch(e){}return r;};}
