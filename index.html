@@ -363,7 +363,7 @@ var L=window.__YLLITE=(()=>{let force=null,reg='core';try{force=localStorage.get
   const on=force==='full'?false:force==='lite'?true:(mob||crashed||lvl>0);return {on,mob,crashed,reg,force,lvl};})();
 var REG=["core", "west", "north", "south", "east"];var reg=REG.indexOf(L.reg)>=0?L.reg:'core';
 var key=!L.on?'full':(reg==='core'&&L.lvl>0?'core'+Math.min(2,L.lvl):reg);
-var V='24.1',bs=function(t){var e=document.querySelector('#bootL .bs');if(e)e.textContent=t;},bar=function(p){var b=document.querySelector('#bootL .bar i');if(b){b.style.transition='width .3s';b.style.width=Math.max(4,Math.round(p*100))+'%';}};
+var V='24.2',bs=function(t){var e=document.querySelector('#bootL .bs');if(e)e.textContent=t;},bar=function(p){var b=document.querySelector('#bootL .bar i');if(b){b.style.transition='width .3s';b.style.width=Math.max(4,Math.round(p*100))+'%';}};
 if(L.mob){var h=document.createElement('div');h.id='webHint';h.style.cssText='margin:12px auto 0;font:700 13px/1.5 -apple-system,"Noto Sans HK",sans-serif;color:#2a1a0a;background:rgba(255,250,236,.92);border:2px solid #2a1a0a;border-radius:12px;padding:8px 12px;max-width:300px;text-align:center';
   h.innerHTML=(L.lvl>0?'<b style="color:#c8102e">上次部機中途閂咗個網頁，今次自動用更慳記憶體嘅設定</b><br>':'')+'一直開唔到？喺 WhatsApp／IG 入面開嘅話，撳「⋯」揀「用 Safari 開」';var bl=document.getElementById('bootL');if(bl)bl.appendChild(h);}
 var got=0;

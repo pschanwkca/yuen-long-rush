@@ -10755,7 +10755,7 @@ function instcAdopt(m){if(m.userData.instc||m.userData.db||m.count<40)return;con
   if(col){m.setColorAt=function(i,c){if(i>=S.n)return THREE.InstancedMesh.prototype.setColorAt.call(this,i,c);c.toArray(S.col,i*3);S.dirty=true;};m.getColorAt=function(i,c){return c.fromArray(S.col,i*3);};}
   Object.defineProperty(m,'count',{get(){return S.k;},set(v){if(v>S.n){S.n=v;}S.dirty=true;},configurable:true});
   INSTC.list.push(S);}
-function instcScan(){for(const c of scene.children){if(!c.isInstancedMesh||c.userData.instc||c.userData.db||c===BLOB.m)continue;if(c.frustumCulled!==false&&c.count<200)continue;
+function instcScan(){for(const c of scene.children){if(!c.isInstancedMesh||c.userData.instc||c.userData.db||c===BLOB.m)continue;if(c.instanceMatrix.usage!==THREE.StaticDrawUsage||c.count!==c.instanceMatrix.count)continue;{const g=c.geometry;if(!g.boundingSphere)g.computeBoundingSphere();if(g.boundingSphere.radius>30||g.boundingSphere.center.length()>30)continue;}if(c.frustumCulled!==false&&c.count<200)continue;
     const g=c.geometry;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;const A=c.instanceMatrix.array;for(let i=0;i<c.count;i++){const x=A[i*16+12],z=A[i*16+14];if(x<x0)x0=x;if(x>x1)x1=x;if(z<z0)z0=z;if(z>z1)z1=z;}
     if(Math.max(x1-x0,z1-z0)<260)continue;instcAdopt(c);}}
 function instcPack(S,cx,cz,D2){const m=S.m,A=m.instanceMatrix.array,C=m.instanceColor?m.instanceColor.array:null;let k=0;
@@ -10795,3 +10795,91 @@ function v12bBoot(){try{FAR.skyR=sky.geometry.parameters.radius||1200;}catch(e){
   const st=document.createElement('style');st.textContent=`html,body,button,.tb,.hud,#touch *{touch-action:manipulation}html.mob,html.mob body,#gl,#joy,#touch .tb{touch-action:none}`;document.head.appendChild(st);
   setTimeout(()=>{try{farScan();instcScan();}catch(e){console.warn(e);}},1500);}
 {const _ib=introBoot;introBoot=function(){try{v12bBoot();}catch(e){console.warn(e);}return _ib.apply(this,arguments);};}
+
+/* =====================================================================
+   v24.2 — shops you can walk into can be wrecked too; fixes
+   1. debris that came to rest on a slab or column checks every half second that it is still held up, and falls if not
+   2. settings and other pop-up panels sit above the game buttons (the buttons step aside while a panel is open)
+   3. walk-in shops, malls and schools can be wrecked like any building (outside the story; the player's home and the
+      police station stay standing). Behind a broken wall you see what the shop holds; the owner and the customers run out
+      shouting; a wrecked shop cannot be entered until it is rebuilt
+   4. the West Rail station: its glass, gates, signs and light boxes break; everyone on it runs; it is put right in a day
+   ===================================================================== */
+/* ---------------------------------------------------------------- 1. debris held up by nothing falls */
+{let acc=0;const _ct=dbChunksTick;dbChunksTick=function(dt){acc+=dt;if(acc>.5&&DB.cs){acc=0;for(const c of DB.cs){if(!c.on||!c.rest)continue;const gy=groundAt(c.p.x,c.p.z,c.p.y+.3)+c.s.y*.4;if(c.p.y-gy>.25)c.rest=false;}}return _ct.apply(this,arguments);};}
+/* ---------------------------------------------------------------- 2. panels above the buttons */
+{const st=document.createElement('style');st.textContent=`#modal{z-index:12!important}body.modalOn #touch,body.modalOn #skHud,body.modalOn #tBoom,body.modalOn .skb{visibility:hidden!important}`;document.head.appendChild(st);}
+function panelTick(){const m=document.getElementById('modal');const on=!!(m&&!m.hidden);if(document.body.classList.contains('modalOn')!==on)document.body.classList.toggle('modalOn',on);}
+/* ---------------------------------------------------------------- 3. walk-in shops */
+const WALK={map:null,doorT:0,kinds:{}};
+const WALK_KIND=[[/文記/,'goods','文記老闆'],[/冰室|茶記|伙記/,'cafe','冰室伙記'],[/便利店|餅家/,'store','店員'],[/銀行/,'bank','銀行職員'],[/投注/,'bet','職員'],[/傢俬/,'furn','傢俬舖老闆'],[/奇趣|模型/,'toys','老闆'],[/廣場|商場|形點/,'mall','保安'],[/學校|中學|小學|書院|幼稚園|學院/,'school','校工'],[/訪客中心/,'hall','職員']];
+function walkKind(label){for(const [re,k,who] of WALK_KIND)if(re.test(label))return {k,who};return null;}
+// which building each walk-in door belongs to
+function walkMap(){if(WALK.map)return WALK.map;const M=new Map();try{for(const it of INTER){if(it.npc)continue;let a=null;try{a=it.at&&it.at();}catch(e){}if(!a||a.x==null)continue;const lab=typeof it.label==='function'?(()=>{try{return it.label();}catch(e){return '';}})():(it.label||'');
+      const kd=walkKind(lab);for(const b of queryB(a.x,a.z,4)){const o=b.dbP?b.dbP.A.o:b;if(!o||!o.pts||!o.dbMat||o.nomap)continue;if(!dbNearPoly(o.pts,a.x,a.z,3))continue;let e=M.get(o);if(!e){e={o,doors:[],kind:kd&&kd.k,who:kd&&kd.who};M.set(o,e);}e.doors.push({it,x:a.x,z:a.z});if(kd&&!e.kind){e.kind=kd.k;e.who=kd.who;}
+        if(!it.dbWrap){it.dbWrap=true;const ok=it.ok;it.ok=function(){const r=ok.apply(this,arguments);if(!r)return r;if(walkDown(o)){walkHint(a);return false;}return r;};}}}}catch(e){dbErr(e,'walk map');}return WALK.map=M;}
+function walkDown(o){const S=DB.sites.get(o);return !!(S&&S.kind==='down')||!!(o.dbA&&o.dbA.down);}
+function walkHint(a){if(GT-WALK.doorT<6)return;if(Math.hypot(PLAYER.x-a.x,PLAYER.z-a.z)>3.2)return;WALK.doorT=GT;toast('🚧 舖頭爛咗，修好先入得');}
+// protection: the story still locks shops and schools; the home tower and the police station never come down
+dbProtected=function(o){if(!o||!o.pts)return true;if(o.flag||o.nomap)return true;try{if(typeof POL!=='undefined'&&POL.b===o)return true;if(typeof HOMEP!=='undefined'&&inPoly((HOMEP.x0+HOMEP.x1)/2,(HOMEP.z0+HOMEP.z1)/2,o.pts))return true;}catch(e){}
+  if(dbSchoolLock()){if(o.t===4)return true;if(o.dbProtStory==null){let p=false;try{if(typeof ylpBuilding==='function'&&ylpBuilding()===o)p=true;if(!p&&DB.prot)for(const q of DB.prot){if(dbNearPoly(o.pts,q.x,q.z,3)){p=true;break;}}}catch(e){}o.dbProtStory=p;}return o.dbProtStory;}
+  return false;};
+// what is inside, by kind of shop: rows of shelves and goods, tables, counters, sofas…
+const WALK_SET={goods:[['#c9c3b8',.5,2,'shelf'],['#e2513b',.3,.3,'goods'],['#3b8fe2',.3,.3,'goods'],['#f2c300',.3,.3,'goods']],cafe:[['#8a5a32',.9,.75,'table'],['#d0262f',.4,.45,'stool'],['#e8e2d4',2.2,1.1,'counter']],store:[['#d8dde2',.6,1.9,'shelf'],['#2fb26b',.3,.3,'goods'],['#ff8a1a',.3,.3,'goods'],['#aee4ff',.8,2,'fridge']],
+  bank:[['#3a4a5a',2.4,1.2,'counter'],['#d8c79a',.6,1.1,'desk'],['#2b2b2b',.5,.9,'chair']],bet:[['#1d6f3a',1.6,1.1,'counter'],['#222',1.2,.8,'screen']],furn:[['#7a8fb0',1.9,.8,'sofa'],['#e8e2d4',2,.55,'bed'],['#8a5a32',1.2,.75,'table']],
+  toys:[['#c9c3b8',.5,2,'shelf'],['#e2513b',.3,.3,'goods'],['#7a3be2',.3,.3,'goods'],['#29b6c8',.3,.3,'goods']],mall:[['#e8e2d4',3,2.6,'kiosk'],['#ff5aa0',.4,.4,'goods'],['#d8dde2',.6,1.9,'shelf'],['#2b2b2b',.5,.9,'bench']],
+  school:[['#b48a5a',1.1,.75,'desk'],['#2f5f3f',3,1.2,'board'],['#5a5a5a',.45,.85,'chair']],hall:[['#e8e2d4',2,1.1,'counter'],['#5a7a9a',.5,.9,'bench']]};
+function walkProps(A){const e=walkMap().get(A.o);const kind=e&&e.kind||(A.o.shops&&A.o.shops.length?'store':null);if(!kind||A.props)return;const o=A.o,set=WALK_SET[kind]||WALK_SET.store;
+  const floors=[];for(const W of A.wins)for(let li=0;li<W.n;li++){const f=W.F0+li;if(kind==='mall'||kind==='school'||f===0)floors.push(f);}if(!floors.length)return;
+  const cap=(DB.mob?40:90)*Math.min(floors.length,DB.mob?2:4);const im=new THREE.InstancedMesh(DBM.box||new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0xffffff,roughness:.8}),cap);im.userData.db=1;im.castShadow=false;im.receiveShadow=true;
+  const col=new THREE.Color(),m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sc=new V3(),pp=new V3();let k=0;const step=kind==='mall'?3.2:2.2;
+  for(const f of floors.slice(0,DB.mob?2:4)){const y0=(o.base||0)+f*A.fh+.02;for(let x=o.x0+1.4;x<o.x1-1.2&&k<cap;x+=step)for(let z=o.z0+1.4;z<o.z1-1.2&&k<cap;z+=step){if(!inPoly(x,z,o.pts)||dbEdgeD(o.pts,x,z)<1.3)continue;
+      const it=set[(Math.abs(Math.round(x*7+z*13+f*5)))%set.length];const w=it[1],h=it[2];const tall=it[3]==='shelf'||it[3]==='fridge'||it[3]==='board';
+      sc.set(it[3]==='goods'?w:w,h,it[3]==='goods'?w:(tall?w*.6:w*.7));pp.set(x+R(-.3,.3),y0+(it[3]==='goods'?1.1+R(0,.7):h/2),z+R(-.3,.3));q.setFromAxisAngle(_bUp,Math.round(R(0,3))*Math.PI/2);m4.compose(pp,q,sc);im.setMatrixAt(k,m4);col.set(it[0]).multiplyScalar(R(.85,1.1));im.setColorAt(k,col);k++;
+      if(it[3]==='shelf'&&k<cap-2){for(let j=0;j<2;j++){const g=set[1+((j+k)%Math.max(1,set.length-1))]||set[0];sc.set(w*.8,.25,.25);pp.set(x,y0+.5+j*.6,z+.32);m4.compose(pp,q,sc);im.setMatrixAt(k,m4);col.set(g[0]);im.setColorAt(k,col);k++;}}}}
+  im.count=k;if(!k)return;scene.add(im);A.props=im;
+  // ceiling lights so the inside reads through a hole even by day
+  if(!DB.mob){const lg=new THREE.Group();lg.userData.db=1;const lm=new THREE.MeshBasicMaterial({color:0xfff4d8,toneMapped:false});for(const f of floors.slice(0,2)){const y=(o.base||0)+(f+1)*A.fh-.45;for(let x=o.x0+2;x<o.x1-2;x+=4.5)for(let z=o.z0+2;z<o.z1-2;z+=4.5){if(!inPoly(x,z,o.pts))continue;const l=new THREE.Mesh(DBM.box,lm);l.scale.set(1.2,.06,.25);l.position.set(x,y,z);lg.add(l);}}scene.add(lg);A.propL=lg;}}
+function walkPropsGone(A){if(A.props){scene.remove(A.props);A.props.dispose&&A.props.dispose();A.props=null;}if(A.propL){scene.remove(A.propL);A.propL=null;}}
+{const _a=dbActivate;dbActivate=function(o,hy){const had=!!o.dbA;const A=_a.apply(this,arguments);if(A&&!had){try{walkProps(A);walkFlee(A);}catch(e){dbErr(e,'walk props');}}return A;};}
+{const _s=dbwSplit;dbwSplit=function(S,hy){const W=_s.apply(this,arguments);if(W)try{const A=S.A;if(A.props&&(walkMap().get(A.o)||{}).kind==='mall'){walkPropsGone(A);walkProps(A);}}catch(e){}return W;};}
+{const _c=dbCollapse;dbCollapse=function(A){const r=_c.apply(this,arguments);if(A&&A.down&&A.props){try{const m=A.props;const m4=new THREE.Matrix4(),p=new V3(),q=new THREE.Quaternion(),s=new V3();for(let i=0;i<Math.min(m.count,DB.mob?10:24);i++){m.getMatrixAt(i,m4);m4.decompose(p,q,s);dbChunk(p.clone(),s.clone(),new V3(R(-3,3),R(2,6),R(-3,3)),R(5,8));}}catch(e){}walkPropsGone(A);}return r;};}
+{const _cl=dbClear;dbClear=function(A){if(A)walkPropsGone(A);return _cl.apply(this,arguments);};}
+// the owner and the customers run out of the door, shouting
+const WALK_SHOUT={mall:['走呀！有炸彈呀！','救命呀——！','保安！保安！','快啲走呀，冧樓呀！'],school:['老師！救命呀！','走呀走呀！','爆炸呀——！'],def:['救命呀！','爆炸呀！走呀！','報警呀！','我間舖呀——！']};
+function walkFlee(A){const e=walkMap().get(A.o);if(!e||!e.doors.length||e.fled&&GT-e.fled<90)return;e.fled=GT;const o=A.o;const mob=DB.mob;
+  const n=e.kind==='mall'?(mob?5:10):e.kind==='school'?(mob?4:8):(mob?2:3)+(rnd()<.5?1:0);const d0=e.doors[0];
+  let best=null,bd=1e9;const p=o.pts;const ccw=o.area>0?1:-1;for(let i=0;i<p.length;i++){const a=p[i],c=p[(i+1)%p.length];const L=Math.hypot(c[0]-a[0],c[1]-a[1]);if(L<.5)continue;const mx=(a[0]+c[0])/2,mz=(a[1]+c[1])/2;const d=Math.hypot(mx-d0.x,mz-d0.z);if(d<bd){bd=d;best={x:d0.x,z:d0.z,nx:(c[1]-a[1])/L*ccw,nz:-(c[0]-a[0])/L*ccw,ex:(c[0]-a[0])/L,ez:(c[1]-a[1])/L,L:Math.min(6,L)};}}
+  if(!best||Math.hypot(PLAYER.x-best.x,PLAYER.z-best.z)>170)return;const lines=WALK_SHOUT[e.kind]||WALK_SHOUT.def;
+  for(let i=0;i<n;i++){if(SHOPX.run.length>(mob?8:16))break;const look=i===0&&e.who?LOOK_CIV():LOOK_CIV();const pp=mkPerson(look,best.x-best.nx*.8+best.ex*R(-1,1),best.z-best.nz*.8+best.ez*R(-1,1));SHOPX.run.push({p:pp,t:-i*.35,ph:0,side:rnd()<.5?-1:1,G:best,spd:R(5,6.6),said:false,who:i===0?(e.who||'店主'):(e.kind==='school'?'學生':'客人'),lines});}
+  try{hsFear(best.x,best.z,30,true,null);}catch(er){}}
+// the runners say their own lines (the owner first)
+shopRunTick=function(dt){for(let i=SHOPX.run.length-1;i>=0;i--){const r=SHOPX.run[i],p=r.p,G=r.G;r.t+=dt;if(r.t<0){p.g.visible=false;continue;}p.g.visible=true;
+    let dx,dz;if(r.t<.9){dx=G.nx;dz=G.nz;}else{const w=Math.sin(r.t*1.3+r.side)*.25;dx=G.ex*r.side+G.nx*(.35+w);dz=G.ez*r.side+G.nz*(.35+w);const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;}
+    const o={x:p.g.position.x+dx*r.spd*dt,z:p.g.position.z+dz*r.spd*dt};const h=pushOut(o,.35,0,.45);if(h){o.x+=h.nz*r.side*4*dt;o.z-=h.nx*r.side*4*dt;}
+    p.g.position.set(o.x,TH(o.x,o.z)+.02,o.z);p.g.rotation.y=Math.atan2(dx,dz);try{animP(p,r.spd,dt);}catch(e){}
+    const wave=Math.sin(r.t*14);p.arms[0].rotation.x=-2.6+wave*.35;p.arms[1].rotation.x=-2.6-wave*.35;
+    if(!r.said&&r.t>.3){r.said=true;const d=Math.hypot(PLAYER.x-o.x,PLAYER.z-o.z);if(d<70&&GT-(SHOPX.sayT||-9)>1.1){SHOPX.sayT=GT;const line=pick(r.lines||SHOPX.shout);subtitle(r.who||'舖頭職員',line);try{speak(line,R(1.1,1.5),1.25,false,.9);}catch(e){}}}
+    if(r.t>14||(r.t>5&&camDist(o.x,o.z)>120)){rmPerson(p);SHOPX.run.splice(i,1);}}};
+/* ---------------------------------------------------------------- 4. the station */
+const STN={items:null,c:null,R:75,hid:[],fled:0,glass:null};
+function stnFind(){if(STN.items)return STN.items;STN.items=[];try{let c=null;for(const it of INTER){const lab=typeof it.label==='string'?it.label:'';if(/出閘離開|搭往天水圍/.test(lab)){const a=it.at&&it.at();if(a){c=c?{x:(c.x+a.x)/2,z:(c.z+a.z)/2}:{x:a.x,z:a.z};}}}if(!c)return STN.items;STN.c=c;
+    try{farDyn();}catch(e){}const b=new THREE.Box3(),s=new THREE.Sphere();for(const o of scene.children){if(o.userData&&o.userData.db||o.isInstancedMesh||o.isLight||o.isPoints||FAR.dyn.has(o)||o===sky)continue;o.traverse(m=>{if(!m.isMesh||!m.geometry)return;if(m.geometry.attributes.position&&m.geometry.attributes.position.count>600)return;
+        const g=m.geometry;if(!g.boundingSphere){const pa=g.attributes.position;if(!pa||!pa.array)return;try{g.computeBoundingSphere();}catch(e){return;}}if(!g.boundingSphere)return;s.copy(g.boundingSphere).applyMatrix4(m.matrixWorld);if(s.radius>4.5||s.radius<.15)return;if(Math.hypot(s.center.x-c.x,s.center.z-c.z)>STN.R)return;if(s.center.y<TH(s.center.x,s.center.z)+.4)return;
+        const mt=m.material;const glassy=mt&&(mt.transparent||mt.opacity<1);const bright=mt&&mt.emissive&&mt.emissive.getHex&&mt.emissive.getHex()>0;STN.items.push({m,c:s.center.clone(),r:s.radius,glassy,bright,hid:false});});}}catch(e){dbErr(e,'stn find');}return STN.items;}
+function stnBreak(it,dir){if(it.hid)return;it.hid=true;it.m.layers.disable(0);it.t0=DB.tot;STN.hid.push(it);const n=DB.mob?3:6;
+  for(let i=0;i<n;i++)dbChunk(it.c.clone().add(new V3(R(-.4,.4),R(-.4,.4),R(-.4,.4))),new V3(R(.08,.25),R(.08,.3),R(.03,.12)),new V3((dir?dir.x:0)*R(1,4)+R(-2,2),R(1,4),(dir?dir.z:0)*R(1,4)+R(-2,2)),R(4,7));
+  if(it.glassy)try{noiseHit(AU.ctx.currentTime,.2,.3,5200,'highpass',AU.sfx);}catch(e){}else if(it.bright)try{sparks(it.c.x,it.c.y,it.c.z,DB.mob?4:8,4);}catch(e){}stnFlee();}
+function stnNear(x,y,z,r,dir,max){const L=stnFind();if(!L.length||!STN.c||Math.hypot(x-STN.c.x,z-STN.c.z)>STN.R+r+5)return 0;let k=0;for(const it of L){if(it.hid)continue;if(it.c.distanceTo(_stnV.set(x,y,z))<r+it.r){stnBreak(it,dir);if(++k>=max)break;}}return k;}
+const _stnV=new V3();
+function stnFlee(){if(GT-STN.fled<60)return;STN.fled=GT;const c=STN.c;try{hsFear(c.x,c.z,60,true,null);}catch(e){}const n=DB.mob?5:10;
+  const G={x:c.x,z:c.z,nx:0,nz:1,ex:1,ez:0,L:8};for(let i=0;i<n;i++){if(SHOPX.run.length>(DB.mob?8:16))break;const a=rnd()*TAU;const g={...G,nx:Math.cos(a),nz:Math.sin(a),ex:-Math.sin(a),ez:Math.cos(a)};const pp=mkPerson(LOOK_CIV(),c.x+Math.cos(a)*R(2,10),c.z+Math.sin(a)*R(2,10));SHOPX.run.push({p:pp,t:-i*.25,ph:0,side:rnd()<.5?-1:1,G:g,spd:R(5,6.8),said:false,who:i?'乘客':'車站職員',lines:['走呀！車站爆炸呀！','救命呀——！','快啲出閘呀！','報警呀！']});}}
+function stnTick(){for(let i=STN.hid.length-1;i>=0;i--){const it=STN.hid[i];if((DB.tot-it.t0)/DB_DAY>=1){it.hid=false;it.m.layers.enable(0);STN.hid.splice(i,1);}}}
+{const _b=dbBlast;dbBlast=function(x,y,z,r,amt){const res=_b.apply(this,arguments);try{stnNear(x,y,z,r*1.2,null,DB.mob?10:24);}catch(e){}return res;};}
+// bullets: the first station fitting along the line of fire breaks
+{const _fw=fireWeapon;fireWeapon=function(){const before=FIRE.cd;const r=_fw.apply(this,arguments);try{const w=WEAPONS[S.wpn];if(w&&w.gun&&FIRE.cd>before&&STN.c&&Math.hypot(PLAYER.x-STN.c.x,PLAYER.z-STN.c.z)<STN.R+40){const o=muzzlePos();const D=AIM.on?camera.getWorldDirection(new V3()):new V3(Math.sin(PLAYER.h),0,Math.cos(PLAYER.h));
+      let best=null,bt=1e9;for(const it of stnFind()){if(it.hid)continue;const v=it.c.clone().sub(o);const t=v.dot(D);if(t<0||t>(w.range||60))continue;const d=v.addScaledVector(D,-t).length();if(d<it.r+.3&&t<bt){bt=t;best=it;}}if(best)stnBreak(best,D);}}catch(e){}return r;};}
+/* ---------------------------------------------------------------- frame */
+{const _u=update;update=function(dt){const r=_u(dt);try{panelTick();if(started){stnTick();}}catch(e){if(!WALK.err){WALK.err=String(e);console.warn(e);}}return r;};}
+function v12cBoot(){setTimeout(()=>{try{walkMap();stnFind();}catch(e){}},2500);}
+{const _ib=introBoot;introBoot=function(){try{v12cBoot();}catch(e){}return _ib.apply(this,arguments);};}
