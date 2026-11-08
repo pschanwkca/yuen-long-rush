@@ -11057,3 +11057,203 @@ function v13aBoot(){const el=document.createElement('div');el.id='ylHud';el.hidd
 html.mob #ylHud{top:auto;bottom:calc(140px + env(safe-area-inset-bottom,0px));left:calc(130px + env(safe-area-inset-left,0px));font-size:11px;padding:4px 6px}html.mob #ylHud svg{width:24px;height:42px}html.mob #ylHud button{font-size:12px;padding:6px 8px}
 html.mob.por #ylHud{bottom:calc(240px + env(safe-area-inset-bottom,0px));left:calc(8px + env(safe-area-inset-left,0px))}`;document.head.appendChild(st);}
 {const _ib=introBoot;introBoot=function(){try{v13aBoot();}catch(e){console.warn(e);}return _ib.apply(this,arguments);};}
+
+/* =====================================================================
+   v26.1 — 多人模式：玩家做乜大家都睇到
+   - every player's whole body pose (punches, kicks, combos, aiming, reloading, jumping, rolling, grabs…) goes out
+     with the position and is played back on the other machines, smoothed between samples
+   - gun shots: muzzle flash on the shooter's gun, every tracer
+   - rockets, molotovs, grenades and remote bombs fly on everyone's screen (the explosion itself was already shared)
+   - hit sparks and blood where a hit lands
+   ===================================================================== */
+const NETA={seq:0,fx:[],fxT:0,sentFx:0,flT:new Map(),pj:[]};
+const r2a=v=>Math.round(v*100)/100;
+// ---------------------------------------------------------------- my pose, read at the end of the frame
+function netaPose(){const p=PLAYER.p;if(!p||!p.arms||!p.legs)return null;const a=[];const add=v=>a.push(r2a(v||0));
+  add(p.b.rotation.x);add(p.b.rotation.y);add(p.b.rotation.z);add(p.b.position.y);
+  for(const j of p.arms){add(j.rotation.x);add(j.rotation.y);add(j.rotation.z);}for(const j of p.legs){add(j.rotation.x);add(j.rotation.y);add(j.rotation.z);}
+  const J=p.J;if(J){add(J.el[0]&&J.el[0].rotation.x);add(J.el[1]&&J.el[1].rotation.x);add(J.kn[0]&&J.kn[0].rotation.x);add(J.kn[1]&&J.kn[1].rotation.x);add(J.spine&&J.spine.rotation.x);add(J.chest&&J.chest.rotation.y);add(J.hips&&J.hips.rotation.y);add(J.neck&&J.neck.rotation.x);add(J.head&&J.head.rotation.y);}
+  else for(let i=0;i<9;i++)a.push(0);
+  add(p.g.rotation.x);add(p.g.rotation.z);return a;}
+{const _ms=mpMyState;mpMyState=function(){const s=_ms.apply(this,arguments);try{if(!PLAYER.car&&!PLAYER.riding)s.ps=NETA.pose||netaPose();}catch(e){}return s;};}
+{const _st=mpState;mpState=function(s){const r=_st.apply(this,arguments);try{const rp=MP.peers.get(s.pid);if(rp&&rp.buf.length){const b=rp.buf[rp.buf.length-1];b.ps=s.ps||null;}}catch(e){}return r;};}
+function netaSample(buf,rt){let a=null,b=null;for(let i=buf.length-1;i>=0;i--){if(buf[i].T<=rt){a=buf[i];b=buf[i+1]||buf[i];break;}}if(!a){a=b=buf[0];}if(!a||!a.ps)return b&&b.ps||null;if(!b.ps||b===a)return a.ps;
+  const t=clamp((rt-a.T)/Math.max(1e-4,b.T-a.T),0,1);const o=new Array(a.ps.length);for(let i=0;i<a.ps.length;i++){const x=a.ps[i],y=b.ps[i]==null?x:b.ps[i];o[i]=x+(y-x)*t;}return o;}
+function netaApply(av,ps){if(!av||!ps||ps.length<27||!av.arms||!av.legs)return;let k=0;const n=()=>ps[k++];
+  av.b.rotation.set(n(),n(),n());av.b.position.y=n();for(const j of av.arms){j.rotation.x=n();j.rotation.y=n();j.rotation.z=n();}for(const j of av.legs){j.rotation.x=n();j.rotation.y=n();j.rotation.z=n();}
+  const J=av.J;if(J){const e0=n(),e1=n(),k0=n(),k1=n(),sp=n(),ch=n(),hi=n(),ne=n(),hd=n();if(J.el[0])J.el[0].rotation.x=e0;if(J.el[1])J.el[1].rotation.x=e1;for(let i=0;i<2;i++){const kk=i?k1:k0;if(J.kn[i])J.kn[i].rotation.x=kk;if(J.an[i])J.an[i].rotation.x=-(av.legs[i].rotation.x+kk)*.75;}
+    if(J.spine)J.spine.rotation.x=sp;if(J.chest)J.chest.rotation.y=ch;if(J.hips)J.hips.rotation.y=hi;if(J.neck)J.neck.rotation.x=ne;if(J.head)J.head.rotation.y=hd;}else k+=9;
+  const gx=n(),gz=n();av.g.rotation.x=gx;av.g.rotation.z=gz;}
+function netaPeers(){if(!MP.on)return;const rt=MP.clock-MP.delay;for(const rp of MP.peers.values()){const av=rp.av;if(!av||!av.g.visible||rp.mech&&rp.mech.g.visible)continue;if(ARC.on&&ARC.M&&ARC.M.yl&&rp.yDn)continue;
+    const ps=netaSample(rp.buf,rt);if(ps)netaApply(av,ps);}}
+// ---------------------------------------------------------------- gunfire: flash on the shooter's gun
+{const _rv=mpRecv;mpRecv=function(d,from){const r=_rv.apply(this,arguments);try{if(d&&d.t==='tr'&&d.pid!==MP.pid){const last=NETA.flT.get(d.pid)||0;if(GT-last>.05){NETA.flT.set(d.pid,GT);const rp=MP.peers.get(d.pid);const wi=rp&&rp.wId?WEAPONS.find(w=>w.id===rp.wId):null;
+      if(typeof wxFlash==='function'&&camDist(d.a[0],d.a[2])<120)wxFlash(new V3(d.a[0],d.a[1],d.a[2]),wi&&wi.gun?wi:{id:'pistol'},1);flash(d.a[0],d.a[1],d.a[2],1.6,.06);}}
+    else if(d&&d.t==='pj'&&d.pid!==MP.pid)netaPjSpawn(d);else if(d&&(d.t==='hfx'||d.t==='bld')&&d.pid!==MP.pid)netaFxPlay(d);}catch(e){if(!NETA.err){NETA.err=String(e);console.warn(e);}}return r;};}
+// ---------------------------------------------------------------- hit sparks and blood
+function netaFxSend(o){if(!MP.on||MP.replay)return;const now=performance.now();if(now-NETA.fxT>1000){NETA.fxT=now;NETA.sentFx=0;}if(NETA.sentFx>=24)return;NETA.sentFx++;mpSend(Object.assign({pid:MP.pid},o));}
+{const _hf=hitFx;hitFx=function(x,y,z,k){const r=_hf.apply(this,arguments);try{netaFxSend({t:'hfx',x:r2a(x),y:r2a(y),z:r2a(z),k});}catch(e){}return r;};}
+if(typeof blood==='function'){const _bl=blood;blood=function(x,y,z,n){const r=_bl.apply(this,arguments);try{netaFxSend({t:'bld',x:r2a(x),y:r2a(y),z:r2a(z),n:n|0});}catch(e){}return r;};}
+function netaFxPlay(d){if(camDist(d.x,d.z)>150)return;MP.replay=true;try{if(d.t==='hfx'){hitFx(d.x,d.y,d.z,d.k);const dd=Math.hypot(d.x-PLAYER.x,d.z-PLAYER.z);if(dd<40)sfx('hit',.5*(1-dd/40));}else blood(d.x,d.y,d.z,d.n||5);}finally{MP.replay=false;}}
+// ---------------------------------------------------------------- thrown and fired things
+function netaPjSend(k,o,v){if(!MP.on||MP.replay)return;mpSend({t:'pj',pid:MP.pid,k,o:[r2a(o.x),r2a(o.y),r2a(o.z)],v:[r2a(v[0]),r2a(v[1]),r2a(v[2])]});}
+{const _fr=fireRocket;fireRocket=function(){const n=ROCK.length;const r=_fr.apply(this,arguments);try{if(ROCK.length>n){const q=ROCK[ROCK.length-1];netaPjSend('r',q.m.position,[q.d.x,q.d.y,q.d.z]);}}catch(e){}return r;};}
+{const _tm=throwMolotov;throwMolotov=function(){const n=MOLO.length;const r=_tm.apply(this,arguments);try{if(MOLO.length>n){const q=MOLO[MOLO.length-1];netaPjSend('m',q.m.position,[q.vx,q.vy,q.vz]);}}catch(e){}return r;};}
+if(typeof wxGrenadeFire==='function'){const _gf=wxGrenadeFire;wxGrenadeFire=function(){const n=WX.gren.length;const r=_gf.apply(this,arguments);try{if(WX.gren.length>n){const q=WX.gren[WX.gren.length-1];netaPjSend('g',q.m.position,[q.vx,q.vy,q.vz]);}}catch(e){}return r;};}
+if(typeof bombThrow==='function'){const _bt=bombThrow;bombThrow=function(){const n=BOMB.fly.length;const r=_bt.apply(this,arguments);try{if(BOMB.fly.length>n){const q=BOMB.fly[BOMB.fly.length-1];netaPjSend('b',q.m.position,[q.vx,q.vy,q.vz]);}}catch(e){}return r;};}
+function netaPjMesh(k){if(k==='r'){const m=new THREE.Group();const b=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.5,8),std('#6b6b5a',.5,.3));b.rotation.x=Math.PI/2;m.add(b);const f=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshBasicMaterial({color:0xffb040,toneMapped:false}));f.position.z=-.3;m.add(f);return m;}
+  if(k==='m')return new THREE.Mesh(new THREE.BoxGeometry(.08,.18,.08),std('#3f6b3a',.3,.1));if(k==='g'){const m=new THREE.Mesh(new THREE.SphereGeometry(.05,10,8),std('#4b5235',.5,.3));m.scale.set(1,1,1.4);return m;}
+  try{return bombMesh();}catch(e){return new THREE.Mesh(new THREE.BoxGeometry(.2,.12,.12),std('#c0392b',.5));}}
+function netaPjSpawn(d){if(camDist(d.o[0],d.o[2])>260)return;const m=netaPjMesh(d.k);m.position.set(d.o[0],d.o[1],d.o[2]);scene.add(m);
+  const p={k:d.k,m,v:new V3(d.v[0],d.v[1],d.v[2]),t:0,stuck:false,life:d.k==='b'?300:d.k==='r'?3.2:d.k==='g'?1.8:4};if(d.k==='r'){m.lookAt(m.position.clone().add(p.v));}NETA.pj.push(p);
+  if(d.k==='r'){const dd=camDist(d.o[0],d.o[2]);if(dd<80)sfx('gun',.6*(1-dd/80));}else{const dd=camDist(d.o[0],d.o[2]);if(dd<40)sfx('swing',.6*(1-dd/40));}}
+function netaPjTick(dt){for(let i=NETA.pj.length-1;i>=0;i--){const p=NETA.pj[i],m=p.m;p.t+=dt;let end=p.t>p.life;
+    if(!p.stuck&&!end){if(p.k==='r'){const st=48*dt;const n=Math.max(1,Math.ceil(st/.8));for(let k=0;k<n;k++){m.position.addScaledVector(p.v,st/n);const q=m.position;if(q.y<TH(q.x,q.z)+.1||solidAt(q.x,q.y,q.z)){end=true;break;}}
+        if(rnd()<.8)emit(PSA,{x:m.position.x,y:m.position.y,z:m.position.z,vx:R(-.3,.3),vy:R(.2,.8),vz:R(-.3,.3),life:R(.4,.8),s0:.25,s1:.6,r:.75,g:.75,b:.75,drag:1.5});}
+      else{p.v.y-=14*dt;const nx=m.position.x+p.v.x*dt,ny=m.position.y+p.v.y*dt,nz=m.position.z+p.v.z*dt;m.rotation.x+=dt*10;const gy=TH(nx,nz);
+        if(ny<gy+.06||solidAt(nx,ny,nz)){if(p.k==='m'){end=true;netaFire(nx,nz);}else if(p.k==='b'){p.stuck=true;m.position.set(nx,Math.max(ny,gy+.06),nz);}else{p.v.set(p.v.x*.3,Math.abs(p.v.y)*.25,p.v.z*.3);if(Math.abs(p.v.y)<.6){p.stuck=true;m.position.y=gy+.06;}}}
+        else m.position.set(nx,ny,nz);if(p.k==='m')emit(PSA,{x:m.position.x,y:m.position.y+.12,z:m.position.z,life:.25,s0:.25,s1:.05,r:1,g:.6,b:.2});}}
+    if(end){scene.remove(m);NETA.pj.splice(i,1);}}
+  for(let i=NETA.fx.length-1;i>=0;i--){const f=NETA.fx[i];f.t-=dt;if(f.t<=0){NETA.fx.splice(i,1);continue;}if(camDist(f.x,f.z)>200)continue;const gy=TH(f.x,f.z);for(let k=0;k<3;k++)emit(PSA,{x:f.x+R(-3,3),y:gy+.2,z:f.z+R(-3,3),vy:R(1.5,3.5),life:R(.4,.8),s0:R(.6,1.2),s1:.15,r:1,g:R(.35,.65),b:.1});}}
+function netaFire(x,z){NETA.fx.push({x,z,t:7});const d=camDist(x,z);if(d<60)sfx('crash',.5*(1-d/60));for(let k=0;k<30;k++)emit(PSA,{x:x+R(-1,1),y:TH(x,z)+R(0,1),z:z+R(-1,1),vy:R(1,4),life:R(.4,.9),s0:R(.8,1.6),s1:.3,r:1,g:R(.4,.7),b:.15});}
+// an explosion clears the thrown thing that caused it
+{const _mb=mpBoom;mpBoom=function(x,y,z){const r=_mb.apply(this,arguments);try{for(let i=NETA.pj.length-1;i>=0;i--){const p=NETA.pj[i];if(p.m.position.distanceTo(new V3(x,y,z))<4.5){scene.remove(p.m);NETA.pj.splice(i,1);}}}catch(e){}return r;};}
+// ---------------------------------------------------------------- frame
+{const _u=update;update=function(dt){const r=_u(dt);try{if(MP.on){NETA.pose=netaPose();MP.sendT=Math.min(MP.sendT,1/15);netaPeers();netaPjTick(dt);}else if(NETA.pj.length){for(const p of NETA.pj)scene.remove(p.m);NETA.pj.length=0;NETA.fx.length=0;}}catch(e){if(!NETA.err){NETA.err=String(e);console.warn(e);}}return r;};}
+
+/* =====================================================================
+   v27.0 — 多人模式：同一個世界
+   Everyone sees the same people and the same cars.
+   - The host's machine runs the town: pedestrians, traffic, parked cars, crowds that flee, crews, kids, students…
+     It also keeps a small crowd and traffic around any player who is far from the host.
+   - Every other machine stops running its own town and shows the host's instead (smoothed, ~0.2 s behind).
+   - Things a player starts themselves (their police chase, a robbery or crash event near them, a taxi fare) are run
+     by that player's machine and shown to everyone the same way.
+   - Hitting, shooting, running over or blowing up someone else's person or car is sent to the machine that runs it;
+     the result comes back to everyone. Jumping into someone else's car takes it over.
+   ===================================================================== */
+const NETW={seq:0,byId:new Map(),prox:new Map(),stash:{peds:[],vehs:[]},sendT:0,stashT:0,lookT:new Map(),applying:false,mkN:0,
+  pool:new Map(),poolT:0,scareT:0,err:null,stat:{p:0,v:0,bytes:0},lastHost:null};
+const NETW_R=170,NETW_DELAY=.2;
+const nr2=v=>Math.round(v*100)/100,nr3=v=>Math.round(v*1000)/1000;
+// ---------------------------------------------------------------- who is who
+{const _rb=rgBuild;rgBuild=function(L){const p=_rb.apply(this,arguments);if(NETW.ctx==='skip'&&p)p.netSkip=true;return p;};}
+{const W=(f)=>function(){const c=NETW.ctx;NETW.ctx='skip';try{return f.apply(this,arguments);}finally{NETW.ctx=c;}};
+  mpBuildAv=W(mpBuildAv);arcMakeEnt=W(arcMakeEnt);if(typeof bossModel==='function')bossModel=W(bossModel);if(typeof bossMinionModel==='function')bossMinionModel=W(bossMinionModel);}
+function netwStatics(){if(NETW.statics)return NETW.statics;const S0=new Set();try{for(const k in NPC){const n=NPC[k];if(n&&n.g)S0.add(n);}}catch(e){}NETW.statics=S0;return S0;}
+function netwArcG(){const G=new Set();try{for(const e of ARC.ents)if(e.g)G.add(e.g);}catch(e){}return G;}
+// a person this machine runs and shows to everyone
+function netwOwnP(p,host,arcG){if(!p||!p.g||p.netNpc||p.netSkip||p===PLAYER.p)return false;if(p.g.parent!==scene||!p.g.visible)return false;if(netwStatics().has(p)||arcG.has(p.g))return false;
+  try{if(FIGHT.includes(p))return false;}catch(e){}const x=p.g.position.x;if(x>4000||x<-4000&&p.g.position.z<-4000)return false;
+  if(host)return true;return netwMineP(p);}
+// on a guest machine only what this player started stays its own
+function netwMineP(p){try{if(COPS.includes(p))return true;}catch(e){}if(p.ev)return true;try{if(TAXI&&TAXI.pax===p)return true;}catch(e){}if(p.netPool)return false;return false;}
+function netwKeepLocalP(p){if(!p||p.netNpc||p.netSkip||p===PLAYER.p)return true;if(p.g.parent!==scene)return true;if(netwStatics().has(p))return true;try{if(FIGHT.includes(p))return true;}catch(e){}
+  const x=p.g.position.x;if(x>4000)return true;return netwMineP(p);}
+function netwOwnV(v,host){if(!v||!v.g||v.netNpc||v.mpNet||v===PLAYER.car||v.digger||v.netId)return false;if(v.g.parent!==scene||v.g.visible===false)return false;if(Math.abs(v.x)>4000)return false;
+  if(host)return true;try{return PCARS.includes(v);}catch(e){return false;}}
+function netwKeepLocalV(v){if(!v||v.netNpc||v.mpNet||v===PLAYER.car||v.digger||v.netId||v.netMine)return true;try{if(PCARS.includes(v))return true;if(TAXI&&TAXI.car===v)return true;}catch(e){}if(Math.abs(v.x)>4000)return true;return false;}
+/* ---------------------------------------------------------------- guest: stop running my own town */
+function netwStashTick(){const guest=MP.on&&!MP.host;if(!guest){netwUnstash();return;}
+  for(let i=peds.length-1;i>=0;i--){const p=peds[i];if(netwKeepLocalP(p))continue;peds.splice(i,1);p.g.visible=false;NETW.stash.peds.push(p);}
+  for(let i=vehicles.length-1;i>=0;i--){const v=vehicles[i];if(netwKeepLocalV(v))continue;if(PLAYER.riding&&PLAYER.rideId&&v.netId===PLAYER.rideId)continue;vehicles.splice(i,1);scene.remove(v.g);NETW.stash.vehs.push(v);}}
+function netwUnstash(){const S0=NETW.stash;if(!S0.peds.length&&!S0.vehs.length)return;for(const p of S0.peds){if(!peds.includes(p))peds.push(p);p.g.visible=true;}for(const v of S0.vehs){if(!vehicles.includes(v)){vehicles.push(v);scene.add(v.g);}}S0.peds.length=0;S0.vehs.length=0;}
+function netwHideLocal(){if(!MP.on||MP.host)return;for(const p of RG.list){if(!p.g.visible||netwKeepLocalP(p))continue;p.g.visible=false;}}
+/* ---------------------------------------------------------------- host: a crowd and traffic around far-away players */
+function netwPoolTick(dt){if(!MP.on||!MP.host){for(const pl of NETW.pool.values())netwPoolPark(pl);return;}
+  const mob=DB&&DB.mob;const NP=mob?10:16,NV=mob?6:10;const me=PLAYER.car||PLAYER;
+  for(const rp of MP.peers.values()){let pl=NETW.pool.get(rp.pid);const q=rp.tag&&rp.tag.sp.position;const live=q&&mpNow()-(rp.lastR||0)<6&&!rp.rm;
+    const far=live&&Math.hypot(q.x-me.x,q.z-me.z)>120&&Math.abs(q.x)<4000;
+    if(!pl){if(!far)continue;pl={pid:rp.pid,peds:[],cars:[],on:false,x:0,z:0};NETW.pool.set(rp.pid,pl);}
+    if(far){pl.x=q.x;pl.z=q.z;
+      if(pl.peds.length<NP&&NETW.mkN<2){NETW.mkN++;const p=person(LOOK_CIV());p.spd=R(1,1.5);p.netPool=rp.pid;p.hp=100;placePed(p,q.x,q.z,0,150);pl.peds.push(p);peds.push(p);}
+      if(pl.cars.length<NV&&NETW.mkN<2){const rs=pickRoadNear(q.x,q.z,10,170);if(rs){NETW.mkN++;const t=rnd();const type=t<.32?'taxi':t<.46?'minibus':'car';const col=type==='taxi'?'#c8102e':type==='minibus'?(rnd()<.5?'#1a7f46':'#c8102e'):pick(['#d9dcdf','#1d2a3a','#7a1f2b','#e7e3da','#2f4f3f','#3b3f46','#b8b9bb','#264d8c']);
+        const v=spawnVehicle(type,col,0,0,0,{ai:true,cruise:R(10,13.5),speed:8,netPool:rp.pid});placeOnRoad(v,rs[0],rs[1]);v.x=v.z=0;pl.cars.push(v);}}
+      if(!pl.on){pl.on=true;for(const p of pl.peds){p.netParked=false;placePed(p,q.x,q.z,0,150);}for(const v of pl.cars){v.netParked=false;v.g.visible=true;const rs=pickRoadNear(q.x,q.z,10,170);if(rs){placeOnRoad(v,rs[0],rs[1]);v.x=v.z=0;}}}}
+    else netwPoolPark(pl);}
+  for(const [pid,pl] of NETW.pool)if(!MP.peers.has(pid))netwPoolPark(pl);}
+function netwPoolPark(pl){if(!pl.on&&pl.parkedOnce)return;pl.on=false;pl.parkedOnce=true;for(const p of pl.peds){p.netParked=true;p.g.visible=false;}for(const v of pl.cars){v.netParked=true;v.g.visible=false;v.x=-99000-rnd()*900;v.z=-99000;syncV(v);}}
+// a pool person or car lives around its player, not around the host's camera
+{const _pu=pedUpdate;pedUpdate=function(p,dt){if(p.netNpc)return;if(p.netPool){if(p.netParked){p.g.visible=false;return;}const pl=NETW.pool.get(p.netPool);if(!pl)return;
+    const cx=camera.position.x,cz=camera.position.z,tx=cam.tx,tz=cam.tz;camera.position.x=pl.x;camera.position.z=pl.z;cam.tx=pl.x;cam.tz=pl.z;try{return _pu(p,dt);}finally{camera.position.x=cx;camera.position.z=cz;cam.tx=tx;cam.tz=tz;}}
+  return _pu(p,dt);};}
+{const _tu=trafficUpdate;trafficUpdate=function(v,dt){if(v.netPool){if(v.netParked)return;const pl=NETW.pool.get(v.netPool);if(!pl)return;const tx=cam.tx,tz=cam.tz;cam.tx=pl.x;cam.tz=pl.z;try{return _tu(v,dt);}finally{cam.tx=tx;cam.tz=tz;}}return _tu(v,dt);};}
+/* ---------------------------------------------------------------- sending what I run */
+function netwNid(o){if(!o.nid){o.nid=++NETW.seq;}NETW.byId.set(o.nid,o);return o.nid;}
+function netwVColor(v){if(v.color)return v.color;let best=null,bn=0;try{v.body.traverse(m=>{if(m.isMesh&&m.material&&m.material.color&&m.geometry&&m.geometry.attributes.position){const n=m.geometry.attributes.position.count;if(n>bn){bn=n;best=m.material.color;}}});}catch(e){}v.color=best?'#'+best.getHexString():'#8a8f96';return v.color;}
+function netwPLook(p){const o={};if(p.look)o.l=p.look;if(p.name)o.n=String(p.name).slice(0,10);let tag=false;for(const c of p.g.children)if(c.isSprite){tag=true;break;}if(tag)o.t=1;
+  try{if(COPS.includes(p)){o.c=1;o.k=p.kind||'patrol';}}catch(e){}if(p.crim)o.cr=1;if(p.kind&&!o.k)o.k=p.kind;return o;}
+function netwSend(dt){NETW.sendT-=dt;if(NETW.sendT>0)return;NETW.sendT=1/8;const host=MP.host;
+  const pts=[];for(const rp of MP.peers.values()){const q=rp.tag&&rp.tag.sp.position;if(q&&mpNow()-(rp.lastR||0)<8)pts.push([q.x,q.z]);}if(!pts.length)return;
+  const near=(x,z)=>{let d=1e9;for(const q of pts){const e=Math.hypot(x-q[0],z-q[1]);if(e<d)d=e;}return d;};
+  const arcG=netwArcG();const now=performance.now()/1000;const P=[],V=[],L={},LV={};
+  const pc=[];for(const p of RG.list){if(!netwOwnP(p,host,arcG))continue;const d=near(p.g.position.x,p.g.position.z);if(d<NETW_R)pc.push([d,p]);}
+  pc.sort((a,b)=>a[0]-b[0]);for(const [d,p] of pc.slice(0,DB&&DB.mob?50:70)){const id=netwNid(p);const g=p.g;const a=p.arms||[],l=p.legs||[];
+    const row=[id,nr2(g.position.x),nr2(g.position.y),nr2(g.position.z),nr3(g.rotation.y),nr2(g.rotation.x),nr2(g.rotation.z),nr2(a[0]?a[0].rotation.x:0),nr2(a[1]?a[1].rotation.x:0),nr2(l[0]?l[0].rotation.x:0),nr2(l[1]?l[1].rotation.x:0)];
+    const k=row.slice(1).join(',');if(p._nk===k&&now-(p._nt||0)<1)continue;p._nk=k;p._nt=now;P.push(row);if(now-(NETW.lookT.get(p)||0)>2.5){NETW.lookT.set(p,now);L[id]=netwPLook(p);}}
+  const vc=[];for(const v of vehicles){if(!netwOwnV(v,host))continue;const d=near(v.x,v.z);if(d<NETW_R+40)vc.push([d,v]);}
+  vc.sort((a,b)=>a[0]-b[0]);for(const [d,v] of vc.slice(0,DB&&DB.mob?32:45)){const id=netwNid(v);const fl=(v.wreck?1:0)|(v.police?2:0)|((v.siren||v.lights)?4:0);
+    const row=[id,nr2(v.x),nr2(v.y||0),nr2(v.z),nr3(v.h),nr2(v.speed||0),nr2(v.steer||0),fl];const k=row.slice(1).join(',');if(v._nk===k&&now-(v._nt||0)<1)continue;v._nk=k;v._nt=now;V.push(row);
+    if(now-(NETW.lookT.get(v)||0)>2.5){NETW.lookT.set(v,now);LV[id]={ty:v.type||'car',c:netwVColor(v),e:v.ems||undefined};}}
+  if(!P.length&&!V.length)return;const msg={t:'nw',pid:MP.pid,T:nr2(MP.clock),P,V};if(Object.keys(L).length)msg.L=L;if(Object.keys(LV).length)msg.LV=LV;mpSend(msg);NETW.stat.p=P.length;NETW.stat.v=V.length;}
+/* ---------------------------------------------------------------- showing what others run */
+function netwRecv(d){const own=d.pid;for(const id in (d.L||{})){const k=own+':'+id;const pr=NETW.prox.get(k);if(pr)pr.look=d.L[id];else NETW.prox.set(k,{k,owner:own,id:+id,kind:'p',look:d.L[id],buf:[],obj:null,last:MP.clock});}
+  for(const id in (d.LV||{})){const k=own+':v'+id;const pr=NETW.prox.get(k);if(pr)pr.look=d.LV[id];else NETW.prox.set(k,{k,owner:own,id:+id,kind:'v',look:d.LV[id],buf:[],obj:null,last:MP.clock});}
+  for(const r of d.P||[]){const k=own+':'+r[0];let pr=NETW.prox.get(k);if(!pr){pr={k,owner:own,id:r[0],kind:'p',look:null,buf:[],obj:null};NETW.prox.set(k,pr);}pr.last=MP.clock;pr.buf.push({T:MP.clock,r});if(pr.buf.length>12)pr.buf.shift();}
+  for(const r of d.V||[]){const k=own+':v'+r[0];let pr=NETW.prox.get(k);if(!pr){pr={k,owner:own,id:r[0],kind:'v',look:null,buf:[],obj:null};NETW.prox.set(k,pr);}pr.last=MP.clock;pr.buf.push({T:MP.clock,r});if(pr.buf.length>12)pr.buf.shift();}}
+function netwMakeP(pr){let p=null;const L=pr.look||{};try{p=L.l&&RG.on?rgBuild(L.l):person({});}catch(e){p=person({});}if(!p.g.parent)scene.add(p.g);
+  p.netNpc=pr.k;p.netOwner=pr.owner;p.road=WALKS[0];p.s=0;p.dir=1;p.off=0;p.spd=1.2;p.hp=100;p.down=0;
+  try{if(L.c){addCap(p,(COP_LOOK[L.k]||{}).cap||'#1d2440');chaserGear(p,L.k);}if(L.k==='knife')knifeMesh(p);}catch(e){}
+  if(L.t&&L.n){try{p.g.add(nameTag(L.n,L.c?'#9cc8ff':L.cr?'#ff6b6b':'#ffd23f'));}catch(e){}}if(L.cr)p.crim=true;peds.push(p);return p;}
+function netwMakeV(pr){const L=pr.look||{};let v=null;try{if(L.e&&typeof emsModel==='function'){v=addVeh(emsModel(L.e),L.e==='amb'?'ambulance':'firetruck',0,0,0,{});}else v=spawnVehicle(L.ty||'car',L.c||'#8a8f96',0,0,0,{ai:false});}catch(e){v=spawnVehicle('car',L.c||'#8a8f96',0,0,0,{ai:false});}
+  v.ai=false;v.netNpc=pr.k;v.netOwner=pr.owner;if(L.ty==='police')v.police=true;return v;}
+function netwDropProx(pr){const o=pr.obj;if(!o)return;if(pr.kind==='p'){scene.remove(o.g);try{RG.list.delete(o);}catch(e){}const i=peds.indexOf(o);if(i>=0)peds.splice(i,1);}else{scene.remove(o.g);const i=vehicles.indexOf(o);if(i>=0)vehicles.splice(i,1);}pr.obj=null;}
+function netwSample(buf,rt){if(!buf.length)return null;let a=buf[0],b=buf[0];for(let i=buf.length-1;i>=0;i--){if(buf[i].T<=rt){a=buf[i];b=buf[i+1]||buf[i];break;}}const t=b===a?0:clamp((rt-a.T)/Math.max(1e-4,b.T-a.T),0,1);return [a.r,b.r,t];}
+function netwShow(dt){const rt=MP.clock-NETW_DELAY;let mkP=0,mkV=0;const me=PLAYER.car||PLAYER;
+  for(const [k,pr] of NETW.prox){const old=MP.clock-(pr.last||0)>3.5||!MP.peers.has(pr.owner);if(old){netwDropProx(pr);NETW.prox.delete(k);continue;}if(!pr.buf.length)continue;
+    if(pr.kind==='p'&&(curRoom||PLAYER.ind)){if(pr.obj)pr.obj.g.visible=false;continue;}
+    if(!pr.obj){if(!pr.look)continue;if(pr.kind==='p'){if(mkP>=3)continue;mkP++;pr.obj=netwMakeP(pr);}else{if(mkV>=2)continue;mkV++;pr.obj=netwMakeV(pr);}}
+    const [a,b,t]=netwSample(pr.buf,rt);const L=(i)=>a[i]+(b[i]-a[i])*t;const o=pr.obj;
+    if(pr.kind==='p'){const x=L(1),y=L(2),z=L(3);const h=mpAng(a[4],b[4],t);const ox=o.g.position.x,oz=o.g.position.z;o.g.position.set(x,y,z);o.g.rotation.set(L(5),h,L(6));o.g.visible=true;
+      const sp=dt>0?Math.min(9,Math.hypot(x-ox,z-oz)/dt):0;o._sp=(o._sp||0)+(sp-(o._sp||0))*.25;animP(o,o._sp,dt);if(o.arms&&o.arms[0]){o.arms[0].rotation.x=L(7);o.arms[1].rotation.x=L(8);}if(o.legs&&o.legs[0]){o.legs[0].rotation.x=L(9);o.legs[1].rotation.x=L(10);}
+      o.down=Math.abs(L(5))>1.2?1:0;}
+    else{const v=o;if(v===PLAYER.car)continue;v.x=L(1);v.y=L(2);v.z=L(3);v.h=mpAng(a[4],b[4],t);v.speed=L(5);v.steer=L(6);v.vx=Math.sin(v.h)*v.speed;v.vz=Math.cos(v.h)*v.speed;v.spin=(v.spin||0)+v.speed/(v.wr||.33)*dt;v.g.visible=true;
+      const fl=b[7]|0;if(fl&1&&!v.wreck){v.wreck=true;try{mpBoomFx(v.x,(v.y||0)+1,v.z);v.body.traverse(m=>{if(m.isMesh&&m.material&&m.material.color){m.material=m.material.clone();m.material.color.multiplyScalar(.25);}});}catch(e){}}syncV(v);}}}
+/* ---------------------------------------------------------------- acting on someone else's person or car */
+function netwAct(o,k,extra){if(!o||!o.netNpc||!MP.on)return;const pr=NETW.prox.get(o.netNpc);if(!pr)return;mpSend(Object.assign({t:'nact',to:pr.owner,from:MP.pid,id:pr.id,v:pr.kind==='v'?1:0,k,ax:nr2(PLAYER.x),az:nr2(PLAYER.z)},extra||{}));}
+{const _ht=hitTarget;hitTarget=function(t,dmg){if(t&&t.netNpc){const part=HIT.part,gun=HIT.gun,w=HIT.w,ex=HIT.explo;HIT.part=null;HIT.gun=false;HIT.w=null;HIT.explo=false;
+    netwAct(t,'hit',{d:Math.round(dmg),pt:part||'torso',g:gun?1:0,ex:ex?1:0,w:w&&w.id||null});try{const x=t.g.position.x,z=t.g.position.z;blood(x,1.3,z,dmg>40?9:5);sfx('hit');}catch(e){}
+    try{const L=(NETW.prox.get(t.netNpc)||{}).look||{};addHeat(L.c?2:1);}catch(e){}return;}return _ht.apply(this,arguments);};}
+{const _ch=carHit;carHit=function(p,v,sp,side,rx,rz){if(p&&p.netNpc){netwAct(p,'ram',{sp:nr2(sp),sd:side,vx:nr2(v.vx||0),vz:nr2(v.vz||0),h:nr3(v.h||0),ty:v.type||'car'});thudSfx&&thudSfx(.4);try{addHeat(1);}catch(e){}return;}return _ch.apply(this,arguments);};}
+{const _ex=explode;explode=function(v){if(v&&v.netNpc){netwAct(v,'boom');try{mpBoomFx(v.x,(v.y||0)+1,v.z);}catch(e){}v.wreck=true;return;}return _ex.apply(this,arguments);};}
+// my machine applies what someone did to my people and cars
+function netwApply(d){const o=NETW.byId.get(d.id);if(!o)return;const P=PLAYER;const sx=P.x,sz=P.z;NETW.applying=true;P.x=d.ax;P.z=d.az;
+  try{if(d.k==='hit'&&!d.v){HIT.part=d.pt||'torso';HIT.gun=!!d.g;HIT.explo=!!d.ex;HIT.w=d.w?WEAPONS.find(w=>w.id===d.w)||null:null;MP.replay=true;try{hitTarget(o,d.d);}finally{MP.replay=false;HIT.part=null;HIT.gun=false;HIT.w=null;HIT.explo=false;}}
+    else if(d.k==='ram'&&!d.v){const sp=d.sp||5;const fake={vx:d.vx,vz:d.vz,h:d.h,x:d.ax,z:d.az,y:TH(d.ax,d.az),type:d.ty,L:4.4,W:1.9,speed:sp};const fx=Math.sin(d.h),fz=Math.cos(d.h);carHit(o,fake,sp,d.sd||1,-fz,fx);}
+    else if(d.k==='boom'&&d.v){if(!o.wreck)explode(o);}
+    else if(d.k==='take'&&d.v){netwGive(o);}
+    else if(d.k==='scare'&&!d.v){}}
+  catch(e){if(!NETW.err){NETW.err='apply '+e;console.warn(e);}}finally{P.x=sx;P.z=sz;NETW.applying=false;}}
+function netwGive(v){const i=vehicles.indexOf(v);if(i>=0)vehicles.splice(i,1);scene.remove(v.g);try{const j=PCARS.indexOf(v);if(j>=0)PCARS.splice(j,1);}catch(e){}try{const j=EMS.list.indexOf(v);if(j>=0)EMS.list.splice(j,1);}catch(e){}
+  if(v.netPool){const pl=NETW.pool.get(v.netPool);if(pl){const j=pl.cars.indexOf(v);if(j>=0)pl.cars.splice(j,1);}}NETW.byId.delete(v.nid);}
+// what I do to someone else's person must not put stars on the machine that runs it
+{const _ah=addHeat;addHeat=function(){if(NETW.applying)return;return _ah.apply(this,arguments);};}
+{const _cr=crime;crime=function(){if(NETW.applying)return;return _cr.apply(this,arguments);};}
+if(typeof gainXP==='function'){const _gx=gainXP;gainXP=function(){if(NETW.applying)return;return _gx.apply(this,arguments);};}
+// gunfire near the host's crowd makes it run
+{const _fw=fireWeapon;fireWeapon=function(){const r=_fw.apply(this,arguments);try{if(MP.on&&!MP.host&&performance.now()-NETW.scareT>1500){NETW.scareT=performance.now();mpSend({t:'nscare',from:MP.pid,x:nr2(PLAYER.x),z:nr2(PLAYER.z)});}}catch(e){}return r;};}
+function netwScare(x,z){for(const p of peds){if(p.netNpc||!p.g.visible)continue;const q=p.g.position;if(Math.hypot(q.x-x,q.z-z)<40){p.flee=Math.max(p.flee||0,R(4,8));try{rgSetExpr(p,'scared',3);}catch(e){}}}}
+{const _rv=mpRecv;mpRecv=function(d,from){if(d&&d.t==='nw'){if(d.pid!==MP.pid){try{netwRecv(d);}catch(e){if(!NETW.err){NETW.err='recv '+e;console.warn(e);}}}if(MP.host)mpRelay(d,from);return;}
+  if(d&&d.t==='nact'){if(d.to===MP.pid)netwApply(d);else if(MP.host){const L=MP.links.get(d.to);if(L)L.send(d);}return;}
+  if(d&&d.t==='nscare'){if(MP.host){try{netwScare(d.x,d.z);}catch(e){}}return;}
+  return _rv.apply(this,arguments);};}
+/* ---------------------------------------------------------------- frame */
+function netwTick(dt){NETW.mkN=0;
+  if(!MP.on){if(NETW.prox.size){for(const pr of NETW.prox.values())netwDropProx(pr);NETW.prox.clear();}netwUnstash();for(const pl of NETW.pool.values())netwPoolPark(pl);NETW.lastHost=null;return;}
+  if(NETW.lastHost!==MP.host){NETW.lastHost=MP.host;if(MP.host)netwUnstash();NETW.stashT=0;}
+  // jumped into someone else's car: it is mine now
+  const pc=PLAYER.car;if(pc){pc.netMine=true;if(pc.netNpc){const pr=NETW.prox.get(pc.netNpc);if(pr){netwAct(pc,'take');NETW.prox.delete(pc.netNpc);}delete pc.netNpc;delete pc.netOwner;}}
+  if((NETW.stashT-=dt)<=0){NETW.stashT=.5;netwStashTick();}
+  if((NETW.poolT-=dt)<=0){NETW.poolT=.25;netwPoolTick(dt);}
+  netwShow(dt);netwSend(dt);netwHideLocal();}
+{const _u=update;update=function(dt){const r=_u(dt);try{netwTick(dt);}catch(e){if(!NETW.err){NETW.err=String(e)+' '+(e.stack||'').split('\n')[1];console.warn(e);}}return r;};}
